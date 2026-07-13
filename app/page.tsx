@@ -1,541 +1,446 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { HouseCard, Perumahan } from "@/components/HouseCard";
+import { HouseCard, type Perumahan } from "@/components/HouseCard";
 import { HouseDetailModal } from "@/components/HouseDetailModal";
-import { MagnifyingGlass, Funnel, Moon, Sun, CaretLeft, CaretRight, MapPin, Heart, Buildings } from "@phosphor-icons/react";
-import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
+import { FloatingHeader } from "@/components/FloatingHeader";
+import { CompareFloatingBar } from "@/components/CompareFloatingBar";
+import ShareButton from "@/components/ShareButton";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useCompare } from "@/hooks/useCompare";
-import ShareButton from "@/components/ShareButton";
-import { CompareFloatingBar } from "@/components/CompareFloatingBar";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MagnifyingGlass, Heart, MapPin } from "@phosphor-icons/react";
+import type { Wilayah, Asosiasi } from "@/components/SearchPanel";
+import { getDistanceToJakarta } from "@/lib/geoUtils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-interface Wilayah {
-  kodeWilayah: string;
-  namaWilayah: string;
-}
-
-interface Asosiasi {
-  id: number;
-  nama: string;
-  singkatan: string;
-}
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const QUICK_FILTERS = [
-  { name: 'Bogor', code: '3201', type: 'kabupaten', prov: '32' },
-  { name: 'Depok', code: '3276', type: 'kabupaten', prov: '32' },
-  { name: 'Tangerang', code: '3603', type: 'kabupaten', prov: '36' },
-  { name: 'Bekasi', code: '3216', type: 'kabupaten', prov: '32' },
+  { name: "Bogor", code: "3201", prov: "32" },
+  { name: "Depok", code: "3276", prov: "32" },
+  { name: "Tangerang", code: "3603", prov: "36" },
+  { name: "Bekasi", code: "3216", prov: "32" },
 ];
 
+const API_BASE = "https://sikumbang.tapera.go.id";
+const LIMIT = 50;
+
+// ─── Page Component ──────────────────────────────────────────────────────────
+
 export default function Page() {
-  const { theme, setTheme } = useTheme();
-  const { favorites, toggleFavorite, isFavorite, addMultipleFavorites } = useFavorites();
-  const { compareList, toggleCompare, isCompared, clearCompare } = useCompare();
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [sharedFavoritesMode, setSharedFavoritesMode] = useState(false);
-  const [sharedData, setSharedData] = useState<Perumahan[]>([]);
-  
+  // ── Data state ──
   const [data, setData] = useState<Perumahan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalData, setTotalData] = useState(0);
+  const [page, setPage] = useState(1);
+
+  // ── Search / filter state ──
   const [keyword, setKeyword] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchTrigger, setSearchTrigger] = useState(0);
-  const [isSubsidi, setIsSubsidi] = useState(false);
-  const [selectedHouse, setSelectedHouse] = useState<Perumahan | null>(null);
-
-  const [provinces, setProvinces] = useState<Wilayah[]>([]);
-  const [kabupatens, setKabupatens] = useState<Wilayah[]>([]);
-  const [kecamatans, setKecamatans] = useState<Wilayah[]>([]);
-  const [asosiasiList, setAsosiasiList] = useState<Asosiasi[]>([]);
-  
   const [selectedProvinsi, setSelectedProvinsi] = useState("");
   const [selectedKabupaten, setSelectedKabupaten] = useState("");
   const [selectedKecamatan, setSelectedKecamatan] = useState("");
   const [selectedAsosiasi, setSelectedAsosiasi] = useState("");
   const [activeKodeWilayah, setActiveKodeWilayah] = useState("");
+  const [localSort, setLocalSort] = useState<"default" | "closest-jakarta">("default");
+  const [isSubsidi, setIsSubsidi] = useState(false);
+  const [searchTrigger, setSearchTrigger] = useState(0);
 
-  const [page, setPage] = useState(1);
-  const [totalData, setTotalData] = useState(0);
-  const limit = 50;
+  // ── Dropdown options ──
+  const [provinces, setProvinces] = useState<Wilayah[]>([]);
+  const [kabupatens, setKabupatens] = useState<Wilayah[]>([]);
+  const [kecamatans, setKecamatans] = useState<Wilayah[]>([]);
+  const [asosiasiList, setAsosiasiList] = useState<Asosiasi[]>([]);
 
+  // ── UI state ──
+  const [selectedHouse, setSelectedHouse] = useState<Perumahan | null>(null);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [sharedFavoritesMode, setSharedFavoritesMode] = useState(false);
+  const [sharedData, setSharedData] = useState<Perumahan[]>([]);
+  const [isRestored, setIsRestored] = useState(false);
+
+  // ── Hooks ──
+  const { favorites, toggleFavorite, isFavorite, addMultipleFavorites } = useFavorites();
+  const { compareList, toggleCompare, isCompared, clearCompare } = useCompare();
+
+  // ── Refs ──
   const loaderRef = useRef<HTMLDivElement>(null);
   const scrollYRef = useRef(0);
-  const [isRestored, setIsRestored] = useState(false);
   const lastFetchedPage = useRef(0);
 
-  // Restore State on Mount
+  // ─── Restore session state / shared URL ────────────────────────────────────
+
   useEffect(() => {
-    // Check for shared URL
     const params = new URLSearchParams(window.location.search);
-    const sharedIds = params.get('shared');
+    const sharedIds = params.get("shared");
 
     if (sharedIds) {
       setSharedFavoritesMode(true);
-      const ids = sharedIds.split(',').filter(Boolean);
-      
-      const fetchShared = async () => {
-        setLoading(true);
-        try {
-          const promises = ids.map(id => fetch(`https://sikumbang.tapera.go.id/lokasi-perumahan/${id}/json`).then(res => res.json()));
-          const results = await Promise.all(promises);
-          
-          const mapped = results.map(res => {
-            const detail = res.detail || {};
-            return {
-              idLokasi: detail.idLokasi,
-              namaPerumahan: detail.namaPerumahan,
-              pengembang: { nama: detail.namaPengembang },
-              jenisPerumahan: detail.jenisPerumahan === 0 ? "Rumah Tapak" : "Rumah Susun",
-              wilayah: { kecamatan: detail.alamat, provinsi: "", kabupaten: "", kelurahan: "" },
-              foto: detail.foto || [],
-              koordinatPerumahan: detail.koordinat && detail.koordinat.lat ? `${detail.koordinat.lat},${detail.koordinat.lon}` : detail.koordinatPerumahan,
-              jumlahUnit: 0,
-              jumlahUnitKomersil: 0,
-              tipeRumah: []
-            };
-          });
-          setSharedData(mapped);
-        } catch (e) {
-          console.error("Failed to fetch shared", e);
-        } finally {
-          setLoading(false);
-          setIsRestored(true);
-        }
-      };
-      
-      fetchShared();
+      const ids = sharedIds.split(",").filter(Boolean);
+      setLoading(true);
+      Promise.all(
+        ids.map(id =>
+          fetch(`${API_BASE}/lokasi-perumahan/${id}/json`)
+            .then(r => r.json())
+            .then(res => {
+              const d = res.detail ?? {};
+              return {
+                idLokasi: d.idLokasi,
+                namaPerumahan: d.namaPerumahan,
+                pengembang: { nama: d.namaPengembang },
+                jenisPerumahan: d.jenisPerumahan === 0 ? "Rumah Tapak" : "Rumah Susun",
+                wilayah: { kecamatan: d.alamat, provinsi: "", kabupaten: "", kelurahan: "" },
+                foto: d.foto ?? [],
+                koordinatPerumahan: d.koordinat?.lat ? `${d.koordinat.lat},${d.koordinat.lon}` : d.koordinatPerumahan,
+                jumlahUnit: 0,
+                jumlahUnitKomersil: 0,
+                tipeRumah: [],
+              } as Perumahan;
+            })
+        )
+      )
+        .then(setSharedData)
+        .catch(console.error)
+        .finally(() => { setLoading(false); setIsRestored(true); });
       return;
     }
 
-    const savedState = sessionStorage.getItem('si_coro_state');
-    if (savedState) {
-      try {
-        const parsed = JSON.parse(savedState);
-        if (parsed.data && parsed.data.length > 0) {
-          setData(parsed.data);
-          setPage(parsed.page || 1);
-          setTotalData(parsed.totalData || 0);
-          lastFetchedPage.current = parsed.page || 0;
-        } else {
-          lastFetchedPage.current = 0; // force fetch if cache is poisoned
+    // Restore from sessionStorage
+    try {
+      const saved = sessionStorage.getItem("si_coro_state");
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (s.data?.length > 0) {
+          setData(s.data);
+          setPage(s.page ?? 1);
+          setTotalData(s.totalData ?? 0);
+          lastFetchedPage.current = s.page ?? 0;
         }
-        
-        setKeyword(parsed.keyword || "");
-        setSearchQuery(parsed.searchQuery || "");
-        setSelectedProvinsi(parsed.selectedProvinsi || "");
-        setSelectedKabupaten(parsed.selectedKabupaten || "");
-        setSelectedKecamatan(parsed.selectedKecamatan || "");
-        setSelectedAsosiasi(parsed.selectedAsosiasi || "");
-        setActiveKodeWilayah(parsed.activeKodeWilayah || "");
-        
-        if (parsed.scrollY) {
-          setTimeout(() => window.scrollTo(0, parsed.scrollY), 100);
-        }
-      } catch (e) {
-        console.error("Failed to restore state", e);
+        setKeyword(s.keyword ?? "");
+        setSearchQuery(s.searchQuery ?? "");
+        setSelectedProvinsi(s.selectedProvinsi ?? "");
+        setSelectedKabupaten(s.selectedKabupaten ?? "");
+        setSelectedKecamatan(s.selectedKecamatan ?? "");
+        setSelectedAsosiasi(s.selectedAsosiasi ?? "");
+        setActiveKodeWilayah(s.activeKodeWilayah ?? "");
+        setIsSubsidi(s.isSubsidi ?? false);
+        setLocalSort(s.localSort ?? "default");
+        if (s.scrollY) setTimeout(() => window.scrollTo(0, s.scrollY), 100);
       }
+    } catch (e) {
+      console.error("Restore state failed", e);
     }
     setIsRestored(true);
   }, []);
 
-  // Track Scroll & Save State
+  // ─── Track scroll ──────────────────────────────────────────────────────────
+
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    const onScroll = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        scrollYRef.current = window.scrollY;
-      }, 100);
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener('scroll', onScroll);
-    };
+    let tid: NodeJS.Timeout;
+    const handler = () => { clearTimeout(tid); tid = setTimeout(() => { scrollYRef.current = window.scrollY; }, 100); };
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => { clearTimeout(tid); window.removeEventListener("scroll", handler); };
   }, []);
+
+  // ─── Persist state to sessionStorage ──────────────────────────────────────
 
   useEffect(() => {
     if (!isRestored || sharedFavoritesMode) return;
-    const saveState = () => {
-      sessionStorage.setItem('si_coro_state', JSON.stringify({
-        data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, selectedKecamatan, selectedAsosiasi, activeKodeWilayah,
-        scrollY: scrollYRef.current
-      }));
-    };
-    saveState();
-    return () => saveState();
-  }, [data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, selectedKecamatan, selectedAsosiasi, activeKodeWilayah, isRestored]);
+    const save = () => sessionStorage.setItem("si_coro_state", JSON.stringify({
+      data, page, totalData, keyword, searchQuery,
+      selectedProvinsi, selectedKabupaten, selectedKecamatan, selectedAsosiasi,
+      activeKodeWilayah, scrollY: scrollYRef.current, isSubsidi, localSort
+    }));
+    save();
+    return () => save();
+  }, [data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, selectedKecamatan, selectedAsosiasi, activeKodeWilayah, isSubsidi, localSort, isRestored, sharedFavoritesMode]);
 
-  // Fetch Provinces and Asosiasi on mount
+  // ─── Fetch provinces & asosiasi on mount ───────────────────────────────────
+
   useEffect(() => {
-    fetch("https://sikumbang.tapera.go.id/ajax/wilayah/get-provinsi")
-      .then(res => res.json())
-      .then(data => setProvinces(data))
-      .catch(err => console.error("Failed to fetch provinces", err));
-
-    fetch("https://sikumbang.tapera.go.id/ajax/asosiasi/get")
-      .then(res => res.json())
-      .then(data => setAsosiasiList(data))
-      .catch(err => console.error("Failed to fetch asosiasi", err));
+    fetch(`${API_BASE}/ajax/wilayah/get-provinsi`).then(r => r.json()).then(setProvinces).catch(console.error);
+    fetch(`${API_BASE}/ajax/asosiasi/get`).then(r => r.json()).then(setAsosiasiList).catch(console.error);
   }, []);
 
-  // Fetch Kabupatens when Provinsi changes
+  // ─── Fetch kabupatens when provinsi changes ────────────────────────────────
+
   useEffect(() => {
-    if (selectedProvinsi) {
-      fetch(`https://sikumbang.tapera.go.id/ajax/wilayah/get-kabupaten/${selectedProvinsi}`)
-        .then(res => res.json())
-        .then(data => setKabupatens(data))
-        .catch(err => console.error("Failed to fetch kabupatens", err));
-    } else {
-      setKabupatens([]);
-    }
     setSelectedKabupaten("");
+    if (!selectedProvinsi) { setKabupatens([]); return; }
+    fetch(`${API_BASE}/ajax/wilayah/get-kabupaten/${selectedProvinsi}`).then(r => r.json()).then(setKabupatens).catch(console.error);
   }, [selectedProvinsi]);
 
-  // Fetch Kecamatans when Kabupaten changes
+  // ─── Fetch kecamatans when kabupaten changes ───────────────────────────────
+
   useEffect(() => {
-    if (selectedKabupaten) {
-      fetch(`https://sikumbang.tapera.go.id/ajax/wilayah/get-kecamatan/${selectedKabupaten}`)
-        .then(res => res.json())
-        .then(data => setKecamatans(data))
-        .catch(err => console.error("Failed to fetch kecamatans", err));
-    } else {
-      setKecamatans([]);
-    }
     setSelectedKecamatan("");
+    if (!selectedKabupaten) { setKecamatans([]); return; }
+    fetch(`${API_BASE}/ajax/wilayah/get-kecamatan/${selectedKabupaten}`).then(r => r.json()).then(setKecamatans).catch(console.error);
   }, [selectedKabupaten]);
 
-  // Fetch Data
+  // ─── Main data fetch ───────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!isRestored || sharedFavoritesMode) return; // Wait for initial restore or skip if shared mode
-    if (page <= lastFetchedPage.current) {
-      setLoading(false);
-      return; // Skip if already fetched/restored
-    }
+    if (!isRestored || sharedFavoritesMode) return;
+    if (page <= lastFetchedPage.current) { setLoading(false); return; }
 
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        let url = `https://sikumbang.tapera.go.id/ajax/lokasi/search?selectedSearch=wilayah&skalaPerumahan=semua&sort=terbaru&searchBy=nama-perumahan&limit=${limit}&page=${page}`;
+    setLoading(true);
+    const url = new URL(`${API_BASE}/ajax/lokasi/search`);
+    url.searchParams.set("selectedSearch", "wilayah");
+    url.searchParams.set("skalaPerumahan", "semua");
+    url.searchParams.set("sort", "terbaru");
+    url.searchParams.set("searchBy", "nama-perumahan");
+    url.searchParams.set("limit", String(LIMIT));
+    url.searchParams.set("page", String(page));
+    if (activeKodeWilayah) url.searchParams.set("kodeWilayah", activeKodeWilayah);
+    if (selectedAsosiasi) url.searchParams.set("asosiasi", selectedAsosiasi);
+    if (searchQuery) url.searchParams.set("keyword", searchQuery);
 
-        if (activeKodeWilayah) {
-          url += `&kodeWilayah=${activeKodeWilayah}`;
-        }
-        if (selectedAsosiasi) {
-          url += `&asosiasi=${selectedAsosiasi}`;
-        }
-        if (searchQuery) {
-          url += `&keyword=${encodeURIComponent(searchQuery)}`;
-        }
-
-        const res = await fetch(url);
-        const json = await res.json();
-
-        if (page === 1) {
-          setData(json.data || []);
-        } else {
-          setData(prev => [...prev, ...(json.data || [])]);
-        }
-        setTotalData(json.count?.totalLokasi || 0);
+    fetch(url.toString())
+      .then(r => r.json())
+      .then(json => {
+        setData(prev => page === 1 ? (json.data ?? []) : [...prev, ...(json.data ?? [])]);
+        setTotalData(json.count?.totalLokasi ?? 0);
         lastFetchedPage.current = page;
-      } catch (error) {
-        console.error("Failed to fetch data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [searchQuery, activeKodeWilayah, selectedAsosiasi, page, searchTrigger, isRestored, sharedFavoritesMode]);
 
-  // Infinite Scroll Observer
+  // ─── Infinite scroll observer ──────────────────────────────────────────────
+
   useEffect(() => {
     if (!isRestored || loading || showFavoritesOnly || data.length >= totalData || totalData === 0) return;
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting) {
-          setPage(p => p + 1);
-        }
-      },
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) setPage(p => p + 1); },
       { threshold: 0.1 }
     );
-    if (loaderRef.current) {
-      observer.observe(loaderRef.current);
-    }
-    return () => observer.disconnect();
-  }, [loading, showFavoritesOnly, data.length, totalData]);
+    if (loaderRef.current) obs.observe(loaderRef.current);
+    return () => obs.disconnect();
+  }, [loading, showFavoritesOnly, data.length, totalData, isRestored]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  // ─── Handlers ──────────────────────────────────────────────────────────────
+
+  const handleSearch = useCallback((e?: React.FormEvent) => {
+    e?.preventDefault();
     setSearchQuery(keyword);
     setActiveKodeWilayah(selectedKecamatan || selectedKabupaten || selectedProvinsi);
-    setData([]); // clear old data to trigger skeleton
-    lastFetchedPage.current = 0; // reset fetch tracker
-    setPage(1); // reset to first page on new search
-    setSearchTrigger(t => t + 1); // Force effect to run even if query is unchanged
-  };
+    setData([]);
+    setPage(1);
+    lastFetchedPage.current = 0;
+    setSearchTrigger(t => t + 1);
+  }, [keyword, selectedKecamatan, selectedKabupaten, selectedProvinsi]);
 
-  const dataSource = sharedFavoritesMode ? sharedData : (showFavoritesOnly ? favorites : data);
-  const filteredData = dataSource.filter((item) => {
-    if (isSubsidi) {
-      return item.tipeRumah?.some((t) => t.status === "subsidi") && item.jumlahUnit > 0;
-    }
-    return true;
-  });
+  const handleQuickFilter = useCallback((qf: typeof QUICK_FILTERS[0]) => {
+    const prov = provinces.find(p => p.kodeWilayah === qf.prov);
+    if (!prov) return;
+    setSelectedProvinsi(prov.kodeWilayah);
+    setSelectedKecamatan("");
+    fetch(`${API_BASE}/ajax/wilayah/get-kabupaten/${qf.prov}`)
+      .then(r => r.json())
+      .then((d: Wilayah[]) => {
+        setKabupatens(d);
+        const kab = d.find(k => k.kodeWilayah === qf.code);
+        if (kab) setSelectedKabupaten(kab.kodeWilayah);
+        setActiveKodeWilayah(qf.code);
+        setData([]);
+        setPage(1);
+        lastFetchedPage.current = 0;
+        setSearchTrigger(t => t + 1);
+      });
+  }, [provinces]);
 
-  const sharedUrl = typeof window !== 'undefined' ? `${window.location.origin}/?shared=${favorites.map(f => f.idLokasi).join(',')}` : '';
+  // ─── Derived state ─────────────────────────────────────────────────────────
+
+  const dataSource = sharedFavoritesMode ? sharedData : showFavoritesOnly ? favorites : data;
+  const filteredData = isSubsidi
+    ? dataSource.filter(item => item.tipeRumah?.some(t => t.status === "subsidi") && item.jumlahUnit > 0)
+    : dataSource;
+
+  const finalData = [...filteredData];
+  if (localSort === "closest-jakarta") {
+    finalData.sort((a, b) => {
+      let distA = Infinity;
+      let distB = Infinity;
+      if (a.koordinatPerumahan) {
+        const [latA, lonA] = a.koordinatPerumahan.split(',').map(Number);
+        distA = getDistanceToJakarta(latA, lonA);
+      }
+      if (b.koordinatPerumahan) {
+        const [latB, lonB] = b.koordinatPerumahan.split(',').map(Number);
+        distB = getDistanceToJakarta(latB, lonB);
+      }
+      return distA - distB;
+    });
+  }
+
+  const sharedUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/?shared=${favorites.map(f => f.idLokasi).join(",")}`
+    : "";
+
+  // Build active search label for header pill
+  const activeSearchLabel = [
+    searchQuery,
+    provinces.find(p => p.kodeWilayah === selectedProvinsi)?.namaWilayah,
+    kabupatens.find(k => k.kodeWilayah === selectedKabupaten)?.namaWilayah,
+    kecamatans.find(k => k.kodeWilayah === selectedKecamatan)?.namaWilayah,
+    asosiasiList.find(a => String(a.id) === selectedAsosiasi)?.singkatan,
+    isSubsidi ? "Subsidi" : "",
+  ].filter(Boolean).join(" · ");
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-      {/* Header */}
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary text-primary-foreground p-2 rounded-xl shadow-lg shadow-primary/20">
-              <MagnifyingGlass weight="bold" className="w-5 h-5" />
-            </div>
-            <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-blue-600">
-              Sikumbang Search
-            </h1>
-          </div>
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Floating Header — always visible */}
+      <FloatingHeader
+        // Search panel props
+        provinces={provinces}
+        kabupatens={kabupatens}
+        kecamatans={kecamatans}
+        asosiasiList={asosiasiList}
+        selectedProvinsi={selectedProvinsi}
+        selectedKabupaten={selectedKabupaten}
+        selectedKecamatan={selectedKecamatan}
+        selectedAsosiasi={selectedAsosiasi}
+        keyword={keyword}
+        isSubsidi={isSubsidi}
+        onProvinsiChange={setSelectedProvinsi}
+        onKabupatenChange={setSelectedKabupaten}
+        onKecamatanChange={setSelectedKecamatan}
+        onAsosiasiChange={setSelectedAsosiasi}
+        onKeywordChange={setKeyword}
+        onSubsidiChange={setIsSubsidi}
+        onSearch={handleSearch}
+        // Header-specific props
+        favoritesCount={favorites.length}
+        showFavoritesOnly={showFavoritesOnly}
+        onToggleFavorites={() => setShowFavoritesOnly(v => !v)}
+        activeSearchLabel={activeSearchLabel}
+      />
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="rounded-full"
-          >
-            {theme === "dark" ? <Sun weight="fill" className="w-5 h-5" /> : <Moon weight="fill" className="w-5 h-5" />}
-          </Button>
-        </div>
-      </header>
+      {/* Spacer for fixed header */}
+      <div className="h-14" />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 space-y-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        {/* Shared favorites banner */}
         {sharedFavoritesMode && (
-          <div className="bg-primary/10 border border-primary/20 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+          <div className="bg-primary/8 border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl md:text-2xl font-bold text-primary flex items-center gap-3">
-                <Heart weight="fill" className="text-red-500" />
+              <h2 className="text-lg font-bold text-primary flex items-center gap-2">
+                <Heart weight="fill" className="text-red-500 w-5 h-5" />
                 Daftar Rekomendasi Favorit
               </h2>
-              <p className="text-muted-foreground mt-2 font-medium">
+              <p className="text-muted-foreground text-sm mt-0.5">
                 Seseorang telah membagikan daftar perumahan pilihan ini kepada Anda.
               </p>
             </div>
-            <Button 
+            <Button
               onClick={() => {
                 addMultipleFavorites(sharedData);
-                alert("Berhasil! Semua perumahan ini telah ditambahkan ke Favorit Anda.");
+                alert("Berhasil! Semua perumahan telah ditambahkan ke Favorit Anda.");
               }}
-              className="rounded-xl px-6 py-4 shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold shrink-0"
+              className="shrink-0"
             >
-              Tambahkan Semua ke Favorit Saya
+              Tambahkan ke Favorit Saya
             </Button>
           </div>
         )}
 
-        {/* Filter Section */}
-        <section className="mb-10 max-w-4xl mx-auto space-y-6">
-          <div className="text-center space-y-2 mb-8">
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-              Temukan Rumah Impian Anda
-            </h2>
-            <p className="text-muted-foreground text-lg">
-              Cari perumahan berdasarkan wilayah di seluruh Indonesia
-            </p>
-          </div>
-
-          <form onSubmit={handleSearch} className="flex flex-col gap-4 bg-card p-6 rounded-3xl border shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="relative">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Provinsi</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <select
-                    className="w-full pl-10 pr-4 py-3 bg-background border-2 border-muted rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none font-medium"
-                    value={selectedProvinsi}
-                    onChange={(e) => setSelectedProvinsi(e.target.value)}
-                  >
-                    <option value="">Semua Provinsi</option>
-                    {provinces.map(prov => (
-                      <option key={prov.kodeWilayah} value={prov.kodeWilayah}>{prov.namaWilayah}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="relative">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Kabupaten / Kota</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <select
-                    className="w-full pl-10 pr-4 py-3 bg-background border-2 border-muted rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none font-medium disabled:opacity-50"
-                    value={selectedKabupaten}
-                    onChange={(e) => setSelectedKabupaten(e.target.value)}
-                    disabled={!selectedProvinsi || kabupatens.length === 0}
-                  >
-                    <option value="">Semua Kabupaten / Kota</option>
-                    {kabupatens.map(kab => (
-                      <option key={kab.kodeWilayah} value={kab.kodeWilayah}>{kab.namaWilayah}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="relative">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Kecamatan</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <select
-                    className="w-full pl-10 pr-4 py-3 bg-background border-2 border-muted rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none font-medium disabled:opacity-50"
-                    value={selectedKecamatan}
-                    onChange={(e) => setSelectedKecamatan(e.target.value)}
-                    disabled={!selectedKabupaten || kecamatans.length === 0}
-                  >
-                    <option value="">Semua Kecamatan</option>
-                    {kecamatans.map(kec => (
-                      <option key={kec.kodeWilayah} value={kec.kodeWilayah}>{kec.namaWilayah}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="relative">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Asosiasi</label>
-                <div className="relative">
-                  <Buildings className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <select
-                    className="w-full pl-10 pr-4 py-3 bg-background border-2 border-muted rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none font-medium"
-                    value={selectedAsosiasi}
-                    onChange={(e) => setSelectedAsosiasi(e.target.value)}
-                  >
-                    <option value="">Semua Asosiasi</option>
-                    {asosiasiList.map(aso => (
-                      <option key={aso.id} value={aso.id}>{aso.singkatan} - {aso.nama}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4 mt-2">
-              <div className="relative flex-1 group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                  <MagnifyingGlass className="h-5 w-5" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Nama perumahan (opsional)"
-                  className="w-full pl-11 pr-4 py-3 bg-background border-2 border-muted rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium"
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                />
-              </div>
-              <Button
-                type="submit"
-                className="py-3 px-8 h-auto rounded-xl text-base font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all"
-              >
-                Cari Rumah
-              </Button>
-            </div>
-          </form>
-
-          <div className="flex justify-center sm:justify-start">
-            <div className="flex items-center gap-3 bg-card/50 px-4 py-3 rounded-2xl border border-muted inline-flex hover:bg-card/80 transition-colors">
-              <Funnel className="h-5 w-5 text-muted-foreground" />
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    className="peer sr-only"
-                    checked={isSubsidi}
-                    onChange={(e) => setIsSubsidi(e.target.checked)}
-                  />
-                  <div className="w-11 h-6 bg-muted rounded-full peer peer-focus:ring-4 peer-focus:ring-primary/20 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                </div>
-                <span className="font-medium text-sm">Hanya Rumah Subsidi Tersedia</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Quick Filters & Actions */}
-          <div className="mt-6 flex flex-col md:flex-row items-center justify-between gap-4 border-t pt-6 border-border">
+        {/* Quick Filters + Actions bar */}
+        {!sharedFavoritesMode && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-muted-foreground mr-2">Pintasan Area:</span>
-              {QUICK_FILTERS.map((qf) => (
+              <span className="text-xs font-semibold text-muted-foreground">Pintasan:</span>
+              {QUICK_FILTERS.map(qf => (
                 <button
                   key={qf.name}
-                  onClick={() => {
-                    const selProv = provinces.find(p => p.kodeWilayah === qf.prov);
-                    if (selProv) {
-                      setSelectedProvinsi(selProv.kodeWilayah);
-                      fetch(`https://sikumbang.tapera.go.id/ajax/wilayah/get-kabupaten/${qf.prov}`)
-                        .then(res => res.json())
-                        .then(d => {
-                          setKabupatens(d);
-                          const selKab = d.find((k: Wilayah) => k.kodeWilayah === qf.code);
-                          if (selKab) setSelectedKabupaten(selKab.kodeWilayah);
-                          setSelectedKecamatan("");
-                          setActiveKodeWilayah(qf.code);
-                          setData([]);
-                          setPage(1);
-                        });
-                    }
-                  }}
-                  className="px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-colors"
+                  onClick={() => handleQuickFilter(qf)}
+                  className="px-3 py-1 rounded-full bg-primary/8 hover:bg-primary/15 text-primary text-xs font-bold transition-colors border border-primary/15"
                 >
                   {qf.name}
                 </button>
               ))}
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${showFavoritesOnly ? 'bg-red-500 text-white' : 'bg-muted hover:bg-muted/80 text-foreground'}`}
-              >
-                <Heart weight={showFavoritesOnly ? "fill" : "regular"} className={showFavoritesOnly ? "text-white" : "text-red-500"} />
-                {showFavoritesOnly ? "Kembali ke Pencarian" : `Lihat Favorit (${favorites.length})`}
-              </button>
-
+            <div className="flex items-center gap-2">
               {favorites.length > 0 && (
-                <ShareButton 
-                  title="Daftar Rumah Favorit Si-Coro" 
-                  text="Lihat daftar perumahan impian yang sudah saya pilih di Si-Coro!" 
+                <ShareButton
+                  title="Daftar Rumah Favorit Si-Coro"
+                  text="Lihat daftar perumahan impian yang sudah saya pilih di Si-Coro!"
                   customUrl={sharedUrl}
                 />
               )}
             </div>
           </div>
-        </section>
+        )}
 
-        {/* Results Section */}
+        {/* Results section */}
         <section>
-          <div className="mb-6 flex justify-between items-end">
-            <h3 className="text-xl font-bold">
-              {activeKodeWilayah || searchQuery ? "Hasil Pencarian" : "Rekomendasi Perumahan Terbaru"}
-            </h3>
-            {!loading && (
-              <p className="text-sm text-muted-foreground">
-                Menampilkan {filteredData.length} dari {totalData} properti
-              </p>
-            )}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold">
+              {showFavoritesOnly
+                ? "Properti Favorit"
+                : activeKodeWilayah || searchQuery
+                  ? "Hasil Pencarian"
+                  : "Rekomendasi Terbaru"}
+            </h2>
+            <div className="flex items-center gap-2">
+              {!loading && !showFavoritesOnly && !sharedFavoritesMode && (
+                <span className="text-sm text-muted-foreground">
+                  {finalData.length} dari {totalData}
+                </span>
+              )}
+              {isSubsidi && (
+                <Badge variant="secondary" className="text-emerald-600 dark:text-emerald-400 text-xs">Subsidi</Badge>
+              )}
+              
+              {!loading && finalData.length > 0 && !showFavoritesOnly && !sharedFavoritesMode && (
+                <div className="ml-2 w-48">
+                  <Select value={localSort} onValueChange={(v: "default" | "closest-jakarta" | null) => { if (v) setLocalSort(v); }}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <MapPin className="w-3.5 h-3.5" weight="bold" />
+                        <SelectValue placeholder="Urutkan" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Terbaru (Default)</SelectItem>
+                      <SelectItem value="closest-jakarta">Terdekat dari Jakarta</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* Loading skeletons */}
           {loading && data.length === 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="rounded-2xl bg-muted animate-pulse aspect-[4/3] w-full"></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="rounded-xl overflow-hidden border bg-card">
+                  <Skeleton className="aspect-video w-full" />
+                  <div className="p-4 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                    <Skeleton className="h-3 w-2/3" />
+                    <div className="pt-2 border-t mt-3">
+                      <Skeleton className="h-5 w-1/2" />
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
-          ) : filteredData.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredData.map((item) => (
-                <HouseCard 
-                  key={item.idLokasi} 
-                  data={item} 
+          ) : finalData.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {finalData.map(item => (
+                <HouseCard
+                  key={item.idLokasi}
+                  data={item}
                   onClick={() => setSelectedHouse(item)}
                   isFavorite={isFavorite(item.idLokasi)}
                   onToggleFavorite={() => toggleFavorite(item)}
@@ -545,44 +450,51 @@ export default function Page() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-20 bg-card rounded-3xl border border-dashed">
-              <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <MagnifyingGlass className="w-8 h-8 text-muted-foreground" />
+            /* Empty state */
+            <div className="text-center py-20 bg-card rounded-2xl border border-dashed">
+              <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                {showFavoritesOnly
+                  ? <Heart className="w-7 h-7 text-muted-foreground" />
+                  : <MagnifyingGlass className="w-7 h-7 text-muted-foreground" />
+                }
               </div>
-              <h3 className="text-lg font-semibold mb-2">Tidak ada perumahan ditemukan</h3>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                Coba gunakan kriteria wilayah yang berbeda atau matikan filter subsidi.
+              <h3 className="text-base font-semibold mb-1.5">
+                {showFavoritesOnly ? "Belum ada properti favorit" : "Tidak ada perumahan ditemukan"}
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                {showFavoritesOnly
+                  ? "Tekan ikon ♥ pada kartu properti untuk menyimpannya."
+                  : "Coba gunakan kriteria wilayah yang berbeda atau matikan filter subsidi."}
               </p>
             </div>
           )}
         </section>
 
-        {/* Infinite Scroll Loader */}
+        {/* Infinite scroll sentinel */}
         {!showFavoritesOnly && !sharedFavoritesMode && data.length < totalData && (
-          <div ref={loaderRef} className="py-12 flex justify-center items-center">
-            {loading ? (
-              <div className="flex flex-col items-center gap-3">
-                <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary border-t-transparent"></div>
-                <span className="text-muted-foreground font-medium">Memuat lebih banyak...</span>
+          <div ref={loaderRef} className="py-10 flex justify-center">
+            {loading && (
+              <div className="flex flex-col items-center gap-2">
+                <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary border-t-transparent" />
+                <span className="text-sm text-muted-foreground font-medium">Memuat lebih banyak...</span>
               </div>
-            ) : (
-              <div className="h-10 w-10" />
             )}
           </div>
         )}
       </main>
 
-      <CompareFloatingBar 
-        compareList={compareList} 
-        onRemove={toggleCompare} 
-        onClear={clearCompare} 
+      {/* Compare floating bar */}
+      <CompareFloatingBar
+        compareList={compareList}
+        onRemove={toggleCompare}
+        onClear={clearCompare}
       />
 
-      {/* Detail Modal */}
+      {/* Detail modal */}
       {selectedHouse && (
-        <HouseDetailModal 
-          data={selectedHouse} 
-          onClose={() => setSelectedHouse(null)} 
+        <HouseDetailModal
+          data={selectedHouse}
+          onClose={() => setSelectedHouse(null)}
           isFavorite={isFavorite(selectedHouse.idLokasi)}
           onToggleFavorite={() => toggleFavorite(selectedHouse)}
         />

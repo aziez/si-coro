@@ -1,22 +1,27 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCompare } from '@/hooks/useCompare';
-import { ArrowLeft, MapPin, Scales, Buildings, Train, Drop, CheckCircle } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
-import { getDistanceToJakarta, getNearestStation } from '@/lib/geoUtils';
+import React, { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCompare } from "@/hooks/useCompare";
+import { ArrowLeft, MapPin, Scales, Buildings, Train, Drop, ShieldCheck, WarningCircle } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getDistanceToJakarta, getNearestStation } from "@/lib/geoUtils";
+import { cn } from "@/lib/utils";
 
-interface TipeRumahItem {
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface TipeItem {
   harga: number;
   luasTanah?: number;
   luasBangunan?: number;
   spesifikasiAtap?: string;
   spesifikasiDinding?: string;
-  spesifikasiLantai?: string;
-  spesifikasiPondasi?: string;
 }
 
 interface DetailData {
@@ -26,28 +31,44 @@ interface DetailData {
   alamat: string;
   idLokasi: string;
   foto: string[];
-  koordinat: { lat: number; lon: number; };
+  koordinat: { lat: number; lon: number };
   koordinatPerumahan?: string | null;
-  tipeRumah?: TipeRumahItem[];
-  tipeRusun?: TipeRumahItem[];
+  tipeRumah?: TipeItem[];
+  tipeRusun?: TipeItem[];
 }
 
 interface CompareData {
   detail: DetailData;
-  tipeList: TipeRumahItem[];
+  tipeList: TipeItem[];
   distanceToJakarta: number | null;
   nearestStation: string | null;
   floodRisk: string | null;
+  floodSafe: boolean;
 }
 
-const formatRupiah = (angka: number) => {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
-};
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const formatRupiah = (n: number) =>
+  new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 
 const getImageUrl = (url: string | undefined | null) => {
-  if (!url) return '';
-  return url.startsWith('http') ? url : `https://sikumbang.tapera.go.id${url.startsWith('/') ? '' : '/'}${url}`;
+  if (!url) return "";
+  return url.startsWith("http") ? url : `https://sikumbang.tapera.go.id${url.startsWith("/") ? "" : "/"}${url}`;
 };
+
+// Row for compare table
+function CompareRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[1fr] gap-0 border-t border-border/50">
+      <div className="bg-muted/30 px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        {label}
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ComparePage() {
   const router = useRouter();
@@ -56,212 +77,226 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (compareList.length === 0) {
-      setLoading(false);
-      return;
-    }
+    if (compareList.length === 0) { setLoading(false); return; }
 
-    const fetchAll = async () => {
-      setLoading(true);
-      try {
-        const promises = compareList.map(async (house) => {
-          const res = await fetch(`https://sikumbang.tapera.go.id/lokasi-perumahan/${house.idLokasi}/json`);
-          const json = await res.json();
-          const detail = json.detail as DetailData;
-          const tipeList = [...(detail.tipeRumah || []), ...(detail.tipeRusun || [])];
+    setLoading(true);
+    Promise.all(
+      compareList.map(async house => {
+        const res = await fetch(`https://sikumbang.tapera.go.id/lokasi-perumahan/${house.idLokasi}/json`);
+        const json = await res.json();
+        const detail = json.detail as DetailData;
+        const tipeList = [...(detail.tipeRumah ?? []), ...(detail.tipeRusun ?? [])];
 
-          let lat: number | undefined;
-          let lon: number | undefined;
+        let lat: number | undefined, lon: number | undefined;
+        if (detail?.koordinat?.lat !== undefined) {
+          lat = parseFloat(String(detail.koordinat.lat));
+          lon = parseFloat(String(detail.koordinat.lon));
+        } else if (detail?.koordinatPerumahan) {
+          const [a, b] = String(detail.koordinatPerumahan).split(",");
+          lat = parseFloat(a?.trim());
+          lon = parseFloat(b?.trim());
+        }
 
-          if (detail?.koordinat && typeof detail.koordinat.lat !== 'undefined') {
-            lat = parseFloat(String(detail.koordinat.lat));
-            lon = parseFloat(String(detail.koordinat.lon));
-          } else if (detail?.koordinatPerumahan) {
-            const parts = typeof detail.koordinatPerumahan === 'string' ? detail.koordinatPerumahan.split(',') : [];
-            lat = parts.length > 0 ? parseFloat(parts[0].trim()) : undefined;
-            lon = parts.length > 1 ? parseFloat(parts[1].trim()) : undefined;
-          }
+        let distanceToJakarta = null;
+        let nearestStation = null;
+        let floodRisk = null;
+        let floodSafe = false;
 
-          let distanceToJakarta = null;
-          let nearestStation = null;
-          let floodRisk = null;
+        if (lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon)) {
+          distanceToJakarta = getDistanceToJakarta(lat, lon);
+          const s = getNearestStation(lat, lon);
+          nearestStation = `${s.station.name} (${s.distance.toFixed(1)} km)`;
+          try {
+            const fd = await fetch(`/api/inarisk?lat=${lat}&lon=${lon}`);
+            const fj = await fd.json();
+            if (fj.success) { floodRisk = fj.riskLevel; floodSafe = fj.isFloodFree; }
+          } catch { /* silently fail */ }
+        }
 
-          if (lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon)) {
-            distanceToJakarta = getDistanceToJakarta(lat, lon);
-            const stationData = getNearestStation(lat, lon);
-            nearestStation = `${stationData.station.name} (${stationData.distance.toFixed(1)} km)`;
-
-            try {
-              const floodRes = await fetch(`/api/inarisk?lat=${lat}&lon=${lon}`);
-              const floodJson = await floodRes.json();
-              if (floodJson.success) {
-                floodRisk = floodJson.riskLevel;
-              }
-            } catch (e) {
-              console.error("Flood fetch error", e);
-            }
-          }
-
-          return { detail, tipeList, distanceToJakarta, nearestStation, floodRisk };
-        });
-
-        const results = await Promise.all(promises);
-        setDataList(results);
-      } catch (e) {
-        console.error("Failed to fetch compare data", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAll();
+        return { detail, tipeList, distanceToJakarta, nearestStation, floodRisk, floodSafe };
+      })
+    )
+      .then(setDataList)
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [compareList]);
+
+  // ─── Loading ────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div>
-          <p className="text-muted-foreground font-medium animate-pulse">Menyiapkan Tabel Perbandingan...</p>
+      <div className="min-h-screen bg-background">
+        <div className="sticky top-0 z-50 glass-header border-b border-border/50 h-14" />
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="flex gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex-1 space-y-3">
+                <Skeleton className="h-40 rounded-xl" />
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
+  // ─── Empty ──────────────────────────────────────────────────────────────
+
   if (compareList.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 text-center space-y-6">
-        <div className="bg-muted w-24 h-24 rounded-full flex items-center justify-center">
-          <Scales className="w-12 h-12 text-muted-foreground" weight="duotone" />
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center gap-5">
+        <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center">
+          <Scales className="w-10 h-10 text-muted-foreground" weight="duotone" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold mb-2">Belum ada properti yang dipilih</h2>
-          <p className="text-muted-foreground max-w-md">Pilih minimal 2 properti dari halaman utama untuk melihat perbandingannya secara mendetail.</p>
+          <h2 className="text-2xl font-bold mb-1.5">Belum ada properti dipilih</h2>
+          <p className="text-muted-foreground max-w-sm text-sm">
+            Pilih minimal 2 properti dari halaman utama menggunakan tombol ⚖ untuk membandingkannya.
+          </p>
         </div>
-        <Button onClick={() => router.push('/')} size="lg" className="rounded-full">
+        <Button onClick={() => router.push("/")} size="lg" className="rounded-full px-8">
           Cari Properti Sekarang
         </Button>
       </div>
     );
   }
 
+  // ─── Compare Table ───────────────────────────────────────────────────────
+
+  const COMPARE_ROWS: { key: keyof CompareData | string; label: string }[] = [
+    { key: "priceRange", label: "Rentang Harga" },
+    { key: "luasTanah", label: "Luas Tanah (Min)" },
+    { key: "luasBangunan", label: "Luas Bangunan (Min)" },
+    { key: "distanceToJakarta", label: "Jarak ke Jakarta" },
+    { key: "nearestStation", label: "Stasiun KRL Terdekat" },
+    { key: "floodRisk", label: "Risiko Banjir" },
+    { key: "spesifikasiAtap", label: "Spesifikasi Atap" },
+    { key: "spesifikasiDinding", label: "Spesifikasi Dinding" },
+  ];
+
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
-      <div className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Button variant="ghost" className="rounded-full hover:bg-muted" onClick={() => router.push('/')}>
-            <ArrowLeft className="w-5 h-5 mr-2" /> Kembali
+      {/* Nav */}
+      <div className="sticky top-0 z-50 glass-header border-b border-border/50">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+          <Button variant="ghost" size="sm" className="rounded-full" onClick={() => router.push("/")}>
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> Kembali
           </Button>
-          <div className="font-bold flex items-center gap-2">
+          <div className="font-bold text-sm flex items-center gap-1.5">
             <Scales weight="fill" className="text-primary" />
             Bandingkan {dataList.length} Properti
           </div>
-          <div className="w-20"></div>
+          <div className="w-20" />
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-        <div className="overflow-x-auto pb-8 -mx-4 px-4 sm:mx-0 sm:px-0">
-          <div className="flex gap-4 min-w-max">
-            {/* Feature Column */}
-            <div className="w-48 shrink-0 py-8 hidden md:block">
-              <div className="h-64 mb-6" /> {/* Spacer for image card */}
-              <div className="space-y-4 text-sm font-semibold text-muted-foreground">
-                <div className="h-16 flex items-center">Rentang Harga</div>
-                <div className="h-12 flex items-center">Luas Tanah (Min)</div>
-                <div className="h-12 flex items-center">Luas Bangunan (Min)</div>
-                <div className="h-16 flex items-center">Jarak ke Jakarta</div>
-                <div className="h-16 flex items-center">Stasiun KRL Terdekat</div>
-                <div className="h-16 flex items-center">Risiko Banjir</div>
-                <div className="h-16 flex items-center">Spesifikasi Atap</div>
-                <div className="h-16 flex items-center">Spesifikasi Dinding</div>
-              </div>
-            </div>
-
-            {/* Data Columns */}
-            {dataList.map((data, idx) => {
-              const cheapest = [...data.tipeList].sort((a, b) => a.harga - b.harga)[0];
-              const highest = [...data.tipeList].sort((a, b) => b.harga - a.harga)[0];
-              const priceRange = cheapest && highest && cheapest.harga !== highest.harga 
-                ? `${formatRupiah(cheapest.harga)} - ${formatRupiah(highest.harga)}`
-                : (cheapest ? formatRupiah(cheapest.harga) : 'Hubungi Pengembang');
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-6">
+          {/* Compare grid */}
+          <div className="flex gap-3 min-w-max">
+            {dataList.map((d, idx) => {
+              const sorted = [...d.tipeList].sort((a, b) => a.harga - b.harga);
+              const cheap = sorted[0];
+              const exp = sorted[sorted.length - 1];
+              const priceRange = cheap && exp && cheap.harga !== exp.harga
+                ? `${formatRupiah(cheap.harga)} – ${formatRupiah(exp.harga)}`
+                : cheap ? formatRupiah(cheap.harga) : "Hubungi Pengembang";
 
               return (
-                <div key={data.detail?.idLokasi || idx} className="w-72 md:w-80 shrink-0 flex flex-col">
-                  {/* Card Header */}
-                  <div className="h-64 mb-6 flex flex-col relative group">
-                    <button 
-                      onClick={() => toggleCompare({ idLokasi: data.detail.idLokasi, namaPerumahan: data.detail.namaPerumahan, foto: data.detail.foto } as any)}
-                      className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      Hapus
-                    </button>
-                    <div className="relative h-40 w-full rounded-2xl overflow-hidden mb-3 bg-muted">
-                      {data.detail?.foto && data.detail.foto[0] ? (
-                        <Image 
-                          src={getImageUrl(data.detail.foto[0])} 
-                          alt={data.detail.namaPerumahan} 
-                          fill 
-                          className="object-cover" 
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center"><Buildings className="w-8 h-8 text-muted-foreground/50" /></div>
-                      )}
+                <div key={d.detail?.idLokasi ?? idx} className="w-72 shrink-0">
+                  <Card className="overflow-hidden border-border/50 shadow-sm">
+                    {/* Card header */}
+                    <div className="relative group">
+                      <button
+                        onClick={() => toggleCompare({ idLokasi: d.detail.idLokasi, namaPerumahan: d.detail.namaPerumahan, foto: d.detail.foto } as any)}
+                        className="absolute top-2 right-2 z-10 bg-destructive text-destructive-foreground text-xs font-semibold px-2.5 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        Hapus
+                      </button>
+                      <div className="relative h-40 w-full bg-muted overflow-hidden">
+                        {d.detail?.foto?.[0] ? (
+                          <Image src={getImageUrl(d.detail.foto[0])} alt={d.detail.namaPerumahan} fill className="object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Buildings className="w-8 h-8 text-muted-foreground/40" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <Link href={`/perumahan/${data.detail?.idLokasi}`} className="hover:underline">
-                      <h3 className="font-bold text-lg leading-tight line-clamp-2">{data.detail?.namaPerumahan}</h3>
-                    </Link>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{data.detail?.namaPengembang}</p>
-                    <div className="mt-2 text-[10px] font-bold px-2 py-1 bg-primary/10 text-primary rounded-full self-start">
-                      {data.detail?.jenisPerumahan === 0 ? "Rumah Tapak" : "Rumah Susun"}
-                    </div>
-                  </div>
 
-                  {/* Data Rows */}
-                  <div className="space-y-4 text-sm divide-y divide-border/50">
-                    <div className="h-16 flex flex-col justify-center pt-2">
-                      <span className="md:hidden text-xs text-muted-foreground font-semibold mb-1">Harga</span>
-                      <span className="font-bold text-primary">{priceRange}</span>
-                    </div>
-                    <div className="h-12 flex flex-col justify-center pt-2">
-                      <span className="md:hidden text-xs text-muted-foreground font-semibold mb-1">Luas Tanah</span>
-                      <span>{cheapest?.luasTanah || '-'} m²</span>
-                    </div>
-                    <div className="h-12 flex flex-col justify-center pt-2">
-                      <span className="md:hidden text-xs text-muted-foreground font-semibold mb-1">Luas Bangunan</span>
-                      <span>{cheapest?.luasBangunan || '-'} m²</span>
-                    </div>
-                    <div className="h-16 flex flex-col justify-center pt-2">
-                      <span className="md:hidden text-xs text-muted-foreground font-semibold mb-1">Jarak ke Jakarta</span>
-                      <div className="flex items-center gap-1.5">
-                        <MapPin weight="duotone" className="text-blue-500" />
-                        {data.distanceToJakarta ? `${data.distanceToJakarta.toFixed(1)} km` : '-'}
+                    <CardContent className="p-4 pb-3 space-y-1.5">
+                      <Link href={`/perumahan/${d.detail?.idLokasi}`} className="hover:underline">
+                        <h3 className="font-bold leading-tight line-clamp-2 text-sm">{d.detail?.namaPerumahan}</h3>
+                      </Link>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{d.detail?.namaPengembang}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3 shrink-0" /> {d.detail?.alamat}
+                      </p>
+                      <Badge variant="secondary" className="text-[10px] mt-1">
+                        {d.detail?.jenisPerumahan === 0 ? "Rumah Tapak" : "Rumah Susun"}
+                      </Badge>
+                    </CardContent>
+
+                    <Separator />
+
+                    {/* Data rows */}
+                    <div className="divide-y divide-border/50 text-sm">
+                      {/* Harga */}
+                      <div className="px-4 py-3">
+                        <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5">Rentang Harga</p>
+                        <span className="font-bold text-primary text-sm">{priceRange}</span>
+                      </div>
+
+                      {/* Luas */}
+                      <div className="px-4 py-2.5 flex justify-between">
+                        <span className="text-muted-foreground text-xs">Luas Tanah</span>
+                        <span className="font-medium text-xs">{cheap?.luasTanah ?? "—"} m²</span>
+                      </div>
+                      <div className="px-4 py-2.5 flex justify-between">
+                        <span className="text-muted-foreground text-xs">Luas Bangunan</span>
+                        <span className="font-medium text-xs">{cheap?.luasBangunan ?? "—"} m²</span>
+                      </div>
+
+                      {/* Geo */}
+                      <div className="px-4 py-2.5 flex items-center gap-1.5">
+                        <MapPin weight="duotone" className="text-blue-500 w-3.5 h-3.5 shrink-0" />
+                        <span className="text-xs">{d.distanceToJakarta ? `${d.distanceToJakarta.toFixed(1)} km ke Jakarta` : "—"}</span>
+                      </div>
+                      <div className="px-4 py-2.5 flex items-start gap-1.5">
+                        <Train weight="duotone" className="text-emerald-500 w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span className="text-xs line-clamp-2 leading-relaxed">{d.nearestStation ?? "—"}</span>
+                      </div>
+
+                      {/* Flood risk */}
+                      <div className={cn("px-4 py-2.5 flex items-center gap-1.5",
+                        d.floodRisk == null ? "" : d.floodSafe ? "bg-emerald-50/50 dark:bg-emerald-900/10" : "bg-red-50/50 dark:bg-red-900/10"
+                      )}>
+                        {d.floodRisk == null
+                          ? <Drop weight="duotone" className="text-muted-foreground w-3.5 h-3.5 shrink-0" />
+                          : d.floodSafe
+                            ? <ShieldCheck weight="duotone" className="text-emerald-600 w-3.5 h-3.5 shrink-0" />
+                            : <WarningCircle weight="duotone" className="text-red-600 w-3.5 h-3.5 shrink-0" />
+                        }
+                        <span className={cn("text-xs font-medium",
+                          d.floodRisk == null ? "text-muted-foreground" : d.floodSafe ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"
+                        )}>
+                          {d.floodRisk ? `Risiko ${d.floodRisk}` : "Data tidak tersedia"}
+                        </span>
+                      </div>
+
+                      {/* Specs */}
+                      <div className="px-4 py-2.5">
+                        <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5">Atap</p>
+                        <p className="text-xs line-clamp-2">{cheap?.spesifikasiAtap ?? "—"}</p>
+                      </div>
+                      <div className="px-4 py-2.5">
+                        <p className="text-[10px] text-muted-foreground font-semibold uppercase mb-0.5">Dinding</p>
+                        <p className="text-xs line-clamp-2">{cheap?.spesifikasiDinding ?? "—"}</p>
                       </div>
                     </div>
-                    <div className="h-16 flex flex-col justify-center pt-2">
-                      <span className="md:hidden text-xs text-muted-foreground font-semibold mb-1">Stasiun KRL</span>
-                      <div className="flex items-start gap-1.5">
-                        <Train weight="duotone" className="text-emerald-500 mt-0.5" />
-                        <span className="line-clamp-2 leading-tight">{data.nearestStation || '-'}</span>
-                      </div>
-                    </div>
-                    <div className="h-16 flex flex-col justify-center pt-2">
-                      <span className="md:hidden text-xs text-muted-foreground font-semibold mb-1">Risiko Banjir</span>
-                      <div className="flex items-center gap-1.5">
-                        <Drop weight="duotone" className={data.floodRisk === 'Rendah' ? 'text-blue-500' : 'text-amber-500'} />
-                        {data.floodRisk || 'Tidak Tersedia'}
-                      </div>
-                    </div>
-                    <div className="h-16 flex flex-col justify-center pt-2">
-                      <span className="md:hidden text-xs text-muted-foreground font-semibold mb-1">Spesifikasi Atap</span>
-                      <span className="line-clamp-2 leading-tight">{cheapest?.spesifikasiAtap || '-'}</span>
-                    </div>
-                    <div className="h-16 flex flex-col justify-center pt-2">
-                      <span className="md:hidden text-xs text-muted-foreground font-semibold mb-1">Spesifikasi Dinding</span>
-                      <span className="line-clamp-2 leading-tight">{cheapest?.spesifikasiDinding || '-'}</span>
-                    </div>
-                  </div>
+                  </Card>
                 </div>
               );
             })}

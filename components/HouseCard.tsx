@@ -3,6 +3,11 @@ import Image from 'next/image';
 import { MapPin, Heart, Users, Buildings, Train, Scales } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getDistanceToJakarta, getNearestStation } from '@/lib/geoUtils';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface TipeRumah {
   id: number;
@@ -48,13 +53,23 @@ export interface Perumahan {
   };
 }
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const formatRupiah = (n: number) =>
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
+
+const resolveImageUrl = (url: string) =>
+  url.startsWith('http') ? url : `https://sikumbang.tapera.go.id${url.startsWith('/') ? '' : '/'}${url}`;
+
+// ─── Component ──────────────────────────────────────────────────────────────
+
 export function HouseCard({
   data,
   onClick,
   isFavorite = false,
   onToggleFavorite,
   isCompared = false,
-  onToggleCompare
+  onToggleCompare,
 }: {
   data: Perumahan;
   onClick?: () => void;
@@ -63,156 +78,137 @@ export function HouseCard({
   isCompared?: boolean;
   onToggleCompare?: (e: React.MouseEvent) => void;
 }) {
-  const imageUrl = data.foto && data.foto.length > 0 ? data.foto[0] : '';
-  let validImageUrl = imageUrl;
-  if (validImageUrl && !validImageUrl.startsWith('http')) {
-    validImageUrl = `https://sikumbang.tapera.go.id${validImageUrl.startsWith('/') ? '' : '/'}${validImageUrl}`;
-  }
+  const imageUrl = data.foto?.[0] ? resolveImageUrl(data.foto[0]) : '';
 
-  // Format currency
-  const formatRupiah = (number: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0,
-    }).format(number);
-  };
-
-  const hargaMulai = data.tipeRumah && data.tipeRumah.length > 0
+  const hargaMulai = data.tipeRumah?.length > 0
     ? Math.min(...data.tipeRumah.map(t => t.harga))
     : 0;
 
   const hasSubsidi = data.tipeRumah?.some(t => t.status === 'subsidi');
   const hasKomersil = data.tipeRumah?.some(t => t.status === 'komersil');
 
-  // Calculate Distance to Jakarta
+  // Geo data
   let distanceToJakarta: number | null = null;
-  let nearestStation: { station: { name: string }, distance: number } | null = null;
+  let nearestStation: { station: { name: string }; distance: number } | null = null;
 
-  if (data.koordinatPerumahan && typeof data.koordinatPerumahan === 'string') {
-    const parts = data.koordinatPerumahan.split(',');
-    if (parts.length >= 2) {
-      const lat = parseFloat(parts[0].trim());
-      const lon = parseFloat(parts[1].trim());
-      if (!isNaN(lat) && !isNaN(lon)) {
-        distanceToJakarta = getDistanceToJakarta(lat, lon);
-        nearestStation = getNearestStation(lat, lon);
-      }
+  if (data.koordinatPerumahan) {
+    const [latStr, lonStr] = data.koordinatPerumahan.split(',');
+    const lat = parseFloat(latStr?.trim());
+    const lon = parseFloat(lonStr?.trim());
+    if (!isNaN(lat) && !isNaN(lon)) {
+      distanceToJakarta = getDistanceToJakarta(lat, lon);
+      nearestStation = getNearestStation(lat, lon);
     }
   }
 
   return (
-    <div
+    <Card
       onClick={onClick}
-      className={cn("group flex flex-col overflow-hidden rounded-2xl bg-card border shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 relative", onClick && "cursor-pointer")}
+      className={cn(
+        'group flex flex-col overflow-hidden border shadow-sm transition-all duration-300',
+        'hover:shadow-md hover:-translate-y-1',
+        onClick && 'cursor-pointer'
+      )}
     >
-      <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite?.(e);
-          }}
-          className="p-2 rounded-full bg-background/80 backdrop-blur shadow-sm hover:scale-110 transition-transform"
-          title="Simpan ke Favorit"
-        >
-          <Heart
-            weight={isFavorite ? "fill" : "regular"}
-            className={cn("w-5 h-5 transition-colors", isFavorite ? "text-red-500" : "text-muted-foreground")}
-          />
-        </button>
+      {/* Action buttons */}
+      <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5">
+        <Tooltip>
+          <TooltipTrigger
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onToggleFavorite?.(e); }}
+            className="p-1.5 rounded-full bg-background/85 backdrop-blur shadow-sm hover:scale-110 transition-transform"
+          >
+            <Heart
+              weight={isFavorite ? 'fill' : 'regular'}
+              className={cn('w-4 h-4 transition-colors', isFavorite ? 'text-red-500' : 'text-muted-foreground')}
+            />
+          </TooltipTrigger>
+          <TooltipContent side="left" className="text-xs">
+            {isFavorite ? 'Hapus dari Favorit' : 'Simpan ke Favorit'}
+          </TooltipContent>
+        </Tooltip>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleCompare?.(e);
-          }}
-          className="p-2 rounded-full bg-background/80 backdrop-blur shadow-sm hover:scale-110 transition-transform"
-          title="Bandingkan Properti"
-        >
-          <Scales
-            weight={isCompared ? "fill" : "regular"}
-            className={cn("w-5 h-5 transition-colors", isCompared ? "text-primary" : "text-muted-foreground")}
-          />
-        </button>
+        <Tooltip>
+          <TooltipTrigger
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onToggleCompare?.(e); }}
+            className="p-1.5 rounded-full bg-background/85 backdrop-blur shadow-sm hover:scale-110 transition-transform"
+          >
+            <Scales
+              weight={isCompared ? 'fill' : 'regular'}
+              className={cn('w-4 h-4 transition-colors', isCompared ? 'text-primary' : 'text-muted-foreground')}
+            />
+          </TooltipTrigger>
+          <TooltipContent side="left" className="text-xs">
+            {isCompared ? 'Hapus dari Bandingkan' : 'Tambah ke Bandingkan'}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
+      {/* Image */}
       <div className="relative aspect-video w-full overflow-hidden bg-muted flex items-center justify-center">
-        {validImageUrl ? (
+        {imageUrl ? (
           <Image
-            src={validImageUrl}
+            src={imageUrl}
             alt={data.namaPerumahan}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = 'none';
-              if (e.target && (e.target as any).nextElementSibling) {
-                (e.target as any).nextElementSibling.style.display = 'flex';
-              }
-            }}
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         ) : null}
-
-        {/* Fallback Icon */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/50 bg-muted" style={{ display: validImageUrl ? 'none' : 'flex' }}>
-          <Buildings weight="duotone" className="w-12 h-12 mb-2" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 bg-muted"
+          style={{ display: imageUrl ? 'none' : 'flex' }}>
+          <Buildings weight="duotone" className="w-10 h-10 mb-1" />
           <span className="text-xs font-medium">Foto tidak tersedia</span>
         </div>
 
-        <div className="absolute top-3 left-3 flex gap-2 flex-wrap">
-          {hasSubsidi && (
-            <span className="rounded-full bg-emerald-500/90 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm">
-              Subsidi
-            </span>
-          )}
-          {hasKomersil && (
-            <span className="rounded-full bg-blue-500/90 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm">
-              Komersil
-            </span>
-          )}
+        {/* Status badges */}
+        <div className="absolute top-2.5 left-2.5 flex gap-1.5">
+          {hasSubsidi && <Badge className="bg-emerald-500/90 text-white text-[10px] px-2 py-0.5 shadow-sm">Subsidi</Badge>}
+          {hasKomersil && <Badge className="bg-blue-500/90 text-white text-[10px] px-2 py-0.5 shadow-sm">Komersil</Badge>}
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col p-5">
-        <div className="mb-2">
-          <h3 className="line-clamp-1 text-lg font-bold tracking-tight text-card-foreground">
+      <CardContent className="flex flex-col flex-1 p-4 gap-2">
+        {/* Name & developer */}
+        <div>
+          <h3 className="line-clamp-1 font-bold tracking-tight text-card-foreground">
             {data.namaPerumahan}
           </h3>
-          <p className="line-clamp-1 text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-            <Users className="h-3.5 w-3.5" />
-            {data.pengembang?.nama || 'Pengembang Tidak Diketahui'}
+          <p className="line-clamp-1 text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+            <Users className="h-3 w-3 shrink-0" />
+            {data.pengembang?.nama || 'Pengembang tidak diketahui'}
           </p>
         </div>
 
-        <div className="mb-4 flex items-start gap-1.5 text-xs text-muted-foreground">
-          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        {/* Location */}
+        <div className="flex items-start gap-1 text-xs text-muted-foreground">
+          <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
           <span className="line-clamp-2 leading-relaxed">
-            {data.wilayah?.kelurahan}, {data.wilayah?.kecamatan}, {data.wilayah?.kabupaten}, {data.wilayah?.provinsi}
+            {[data.wilayah?.kelurahan, data.wilayah?.kecamatan, data.wilayah?.kabupaten].filter(Boolean).join(', ')}
           </span>
         </div>
 
-        {distanceToJakarta !== null && (
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md w-fit">
-            <Buildings className="h-3.5 w-3.5" />
-            <span>{distanceToJakarta.toFixed(1)} km ke Jakarta</span>
-          </div>
-        )}
-
-        {nearestStation && (
-          <div className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-md w-fit line-clamp-1">
-            <Train className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{nearestStation.distance.toFixed(1)} km ke Stasiun {nearestStation.station.name}</span>
-          </div>
-        )}
-
-        <div className="mt-auto border-t pt-4">
-          <p className="text-xs text-muted-foreground mb-1">Mulai dari</p>
-          <div className="flex items-end justify-between">
-            <span className="text-lg font-bold text-primary">
-              {hargaMulai > 0 ? formatRupiah(hargaMulai) : 'Harga tidak tersedia'}
+        {/* Geo insights */}
+        <div className="flex flex-wrap gap-1.5 mt-auto">
+          {distanceToJakarta !== null && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-md">
+              <Buildings className="h-2.5 w-2.5" />{distanceToJakarta.toFixed(1)} km ke Jakarta
             </span>
-          </div>
+          )}
+          {nearestStation && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-md truncate max-w-full">
+              <Train className="h-2.5 w-2.5 shrink-0" />{nearestStation.distance.toFixed(1)} km · {nearestStation.station.name}
+            </span>
+          )}
         </div>
-      </div>
-    </div>
+
+        {/* Price */}
+        <div className="border-t pt-3 mt-1">
+          <p className="text-[10px] text-muted-foreground mb-0.5">Mulai dari</p>
+          <span className="text-base font-bold text-primary">
+            {hargaMulai > 0 ? formatRupiah(hargaMulai) : 'Harga tidak tersedia'}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
