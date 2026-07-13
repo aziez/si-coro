@@ -33,5 +33,18 @@ export function useFavorites() {
     return favorites.some(f => f.idLokasi === idLokasi);
   };
 
-  return { favorites, toggleFavorite, isFavorite };
+  const addMultipleFavorites = (houses: Perumahan[]) => {
+    setFavorites(prev => {
+      const newFavs = [...prev];
+      houses.forEach(house => {
+        if (!newFavs.some(f => f.idLokasi === house.idLokasi)) {
+          newFavs.push(house);
+        }
+      });
+      localStorage.setItem('sikumbang_favorites', JSON.stringify(newFavs));
+      return newFavs;
+    });
+  };
+
+  return { favorites, toggleFavorite, isFavorite, addMultipleFavorites };
 }

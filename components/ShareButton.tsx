@@ -7,14 +7,15 @@ import { Button } from '@/components/ui/button';
 interface ShareButtonProps {
   title: string;
   text: string;
+  customUrl?: string;
 }
 
-export default function ShareButton({ title, text }: ShareButtonProps) {
+export default function ShareButton({ title, text, customUrl }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
 
   const handleShare = async () => {
-    const url = window.location.href;
+    const url = customUrl || window.location.href;
     const shareData = {
       title,
       text,
@@ -34,7 +35,7 @@ export default function ShareButton({ title, text }: ShareButtonProps) {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(customUrl || window.location.href);
       setCopied(true);
       setTimeout(() => {
         setCopied(false);
@@ -46,8 +47,8 @@ export default function ShareButton({ title, text }: ShareButtonProps) {
   };
 
   const shareToWhatsApp = () => {
-    const url = window.location.href;
-    const waText = encodeURIComponent(`${text}\n\nCek rumah ini di Si-Coro: ${url}`);
+    const url = customUrl || window.location.href;
+    const waText = encodeURIComponent(`${text}\n\nCek tautan ini: ${url}`);
     window.open(`https://wa.me/?text=${waText}`, '_blank');
     setShowOptions(false);
   };

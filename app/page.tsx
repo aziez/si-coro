@@ -7,6 +7,7 @@ import { MagnifyingGlass, Funnel, Moon, Sun, CaretLeft, CaretRight, MapPin, Hear
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { useFavorites } from "@/hooks/useFavorites";
+import ShareButton from "@/components/ShareButton";
 
 interface Wilayah {
   kodeWilayah: string;
@@ -22,8 +23,10 @@ const QUICK_FILTERS = [
 
 export default function Page() {
   const { theme, setTheme } = useTheme();
-  const { favorites, toggleFavorite, isFavorite } = useFavorites();
+  const { favorites, toggleFavorite, isFavorite, addMultipleFavorites } = useFavorites();
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [sharedFavoritesMode, setSharedFavoritesMode] = useState(false);
+  const [sharedData, setSharedData] = useState<Perumahan[]>([]);
   
   const [data, setData] = useState<Perumahan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +53,48 @@ export default function Page() {
 
   // Restore State on Mount
   useEffect(() => {
+    // Check for shared URL
+    const params = new URLSearchParams(window.location.search);
+    const sharedIds = params.get('shared');
+
+    if (sharedIds) {
+      setSharedFavoritesMode(true);
+      const ids = sharedIds.split(',').filter(Boolean);
+      
+      const fetchShared = async () => {
+        setLoading(true);
+        try {
+          const promises = ids.map(id => fetch(`https://sikumbang.tapera.go.id/lokasi-perumahan/${id}/json`).then(res => res.json()));
+          const results = await Promise.all(promises);
+          
+          const mapped = results.map(res => {
+            const detail = res.detail || {};
+            return {
+              idLokasi: detail.idLokasi,
+              namaPerumahan: detail.namaPerumahan,
+              pengembang: { nama: detail.namaPengembang },
+              jenisPerumahan: detail.jenisPerumahan === 0 ? "Rumah Tapak" : "Rumah Susun",
+              wilayah: { kecamatan: detail.alamat, provinsi: "", kabupaten: "", kelurahan: "" },
+              foto: detail.foto || [],
+              koordinatPerumahan: detail.koordinat && detail.koordinat.lat ? `${detail.koordinat.lat},${detail.koordinat.lon}` : detail.koordinatPerumahan,
+              jumlahUnit: 0,
+              jumlahUnitKomersil: 0,
+              tipeRumah: []
+            };
+          });
+          setSharedData(mapped);
+        } catch (e) {
+          console.error("Failed to fetch shared", e);
+        } finally {
+          setLoading(false);
+          setIsRestored(true);
+        }
+      };
+      
+      fetchShared();
+      return;
+    }
+
     const savedState = sessionStorage.getItem('si_coro_state');
     if (savedState) {
       try {
@@ -96,7 +141,7 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (!isRestored) return;
+    if (!isRestored || sharedFavoritesMode) return;
     const saveState = () => {
       sessionStorage.setItem('si_coro_state', JSON.stringify({
         data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, activeKodeWilayah,
@@ -130,7 +175,7 @@ export default function Page() {
 
   // Fetch Data
   useEffect(() => {
-    if (!isRestored) return; // Wait for initial restore
+    if (!isRestored || sharedFavoritesMode) return; // Wait for initial restore or skip if shared mode
     if (page <= lastFetchedPage.current) {
       setLoading(false);
       return; // Skip if already fetched/restored
@@ -166,7 +211,7 @@ export default function Page() {
     };
 
     fetchData();
-  }, [searchQuery, activeKodeWilayah, page, searchTrigger]);
+  }, [searchQuery, activeKodeWilayah, page, searchTrigger, isRestored, sharedFavoritesMode]);
 
   // Infinite Scroll Observer
   useEffect(() => {
@@ -195,13 +240,15 @@ export default function Page() {
     setSearchTrigger(t => t + 1); // Force effect to run even if query is unchanged
   };
 
-  const dataSource = showFavoritesOnly ? favorites : data;
+  const dataSource = sharedFavoritesMode ? sharedData : (showFavoritesOnly ? favorites : data);
   const filteredData = dataSource.filter((item) => {
     if (isSubsidi) {
       return item.tipeRumah?.some((t) => t.status === "subsidi") && item.jumlahUnit > 0;
     }
     return true;
   });
+
+  const sharedUrl = typeof window !== 'undefined' ? `${window.location.origin}/?shared=${favorites.map(f => f.idLokasi).join(',')}` : '';
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -228,8 +275,31 @@ export default function Page() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Search & Filter Section */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 space-y-12">
+        {sharedFavoritesMode && (
+          <div className="bg-primary/10 border border-primary/20 rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+            <div>
+              <h2 className="text-xl md:text-2xl font-bold text-primary flex items-center gap-3">
+                <Heart weight="fill" className="text-red-500" />
+                Daftar Rekomendasi Favorit
+              </h2>
+              <p className="text-muted-foreground mt-2 font-medium">
+                Seseorang telah membagikan daftar perumahan pilihan ini kepada Anda.
+              </p>
+            </div>
+            <Button 
+              onClick={() => {
+                addMultipleFavorites(sharedData);
+                alert("Berhasil! Semua perumahan ini telah ditambahkan ke Favorit Anda.");
+              }}
+              className="rounded-xl px-6 py-4 shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold shrink-0"
+            >
+              Tambahkan Semua ke Favorit Saya
+            </Button>
+          </div>
+        )}
+
+        {/* Filter Section */}
         <section className="mb-10 max-w-4xl mx-auto space-y-6">
           <div className="text-center space-y-2 mb-8">
             <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
@@ -348,13 +418,23 @@ export default function Page() {
               ))}
             </div>
 
-            <button
-              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${showFavoritesOnly ? 'bg-red-500 text-white' : 'bg-muted hover:bg-muted/80 text-foreground'}`}
-            >
-              <Heart weight={showFavoritesOnly ? "fill" : "regular"} className={showFavoritesOnly ? "text-white" : "text-red-500"} />
-              {showFavoritesOnly ? "Kembali ke Pencarian" : `Lihat Favorit (${favorites.length})`}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${showFavoritesOnly ? 'bg-red-500 text-white' : 'bg-muted hover:bg-muted/80 text-foreground'}`}
+              >
+                <Heart weight={showFavoritesOnly ? "fill" : "regular"} className={showFavoritesOnly ? "text-white" : "text-red-500"} />
+                {showFavoritesOnly ? "Kembali ke Pencarian" : `Lihat Favorit (${favorites.length})`}
+              </button>
+
+              {favorites.length > 0 && (
+                <ShareButton 
+                  title="Daftar Rumah Favorit Si-Coro" 
+                  text="Lihat daftar perumahan impian yang sudah saya pilih di Si-Coro!" 
+                  customUrl={sharedUrl}
+                />
+              )}
+            </div>
           </div>
         </section>
 
@@ -403,7 +483,7 @@ export default function Page() {
         </section>
 
         {/* Infinite Scroll Loader */}
-        {!showFavoritesOnly && data.length < totalData && (
+        {!showFavoritesOnly && !sharedFavoritesMode && data.length < totalData && (
           <div ref={loaderRef} className="py-12 flex justify-center items-center">
             {loading ? (
               <div className="flex flex-col items-center gap-3">
