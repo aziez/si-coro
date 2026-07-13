@@ -26,9 +26,10 @@ export default function Page() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   
   const [data, setData] = useState<Perumahan[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchTrigger, setSearchTrigger] = useState(0);
   const [isSubsidi, setIsSubsidi] = useState(false);
   const [selectedHouse, setSelectedHouse] = useState<Perumahan | null>(null);
 
@@ -53,15 +54,20 @@ export default function Page() {
     if (savedState) {
       try {
         const parsed = JSON.parse(savedState);
-        setData(parsed.data || []);
-        setPage(parsed.page || 1);
-        setTotalData(parsed.totalData || 0);
+        if (parsed.data && parsed.data.length > 0) {
+          setData(parsed.data);
+          setPage(parsed.page || 1);
+          setTotalData(parsed.totalData || 0);
+          lastFetchedPage.current = parsed.page || 0;
+        } else {
+          lastFetchedPage.current = 0; // force fetch if cache is poisoned
+        }
+        
         setKeyword(parsed.keyword || "");
         setSearchQuery(parsed.searchQuery || "");
         setSelectedProvinsi(parsed.selectedProvinsi || "");
         setSelectedKabupaten(parsed.selectedKabupaten || "");
         setActiveKodeWilayah(parsed.activeKodeWilayah || "");
-        lastFetchedPage.current = parsed.page || 0;
         
         if (parsed.scrollY) {
           setTimeout(() => window.scrollTo(0, parsed.scrollY), 100);
@@ -125,7 +131,10 @@ export default function Page() {
   // Fetch Data
   useEffect(() => {
     if (!isRestored) return; // Wait for initial restore
-    if (page <= lastFetchedPage.current) return; // Skip if already fetched/restored
+    if (page <= lastFetchedPage.current) {
+      setLoading(false);
+      return; // Skip if already fetched/restored
+    }
 
     const fetchData = async () => {
       setLoading(true);
@@ -157,7 +166,7 @@ export default function Page() {
     };
 
     fetchData();
-  }, [searchQuery, activeKodeWilayah, page]);
+  }, [searchQuery, activeKodeWilayah, page, searchTrigger]);
 
   // Infinite Scroll Observer
   useEffect(() => {
@@ -183,6 +192,7 @@ export default function Page() {
     setData([]); // clear old data to trigger skeleton
     lastFetchedPage.current = 0; // reset fetch tracker
     setPage(1); // reset to first page on new search
+    setSearchTrigger(t => t + 1); // Force effect to run even if query is unchanged
   };
 
   const dataSource = showFavoritesOnly ? favorites : data;
