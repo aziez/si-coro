@@ -8,6 +8,10 @@
 !.yarn/releases
 !.yarn/versions
 
+/.agent
+/.vscode
+
+
 # testing
 /coverage
 
