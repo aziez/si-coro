@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { HouseCard, Perumahan } from "@/components/HouseCard";
 import { HouseDetailModal } from "@/components/HouseDetailModal";
-import { MagnifyingGlass, Funnel, Moon, Sun, CaretLeft, CaretRight, MapPin, Heart } from "@phosphor-icons/react";
+import { MagnifyingGlass, Funnel, Moon, Sun, CaretLeft, CaretRight, MapPin, Heart, Buildings } from "@phosphor-icons/react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -14,6 +14,12 @@ import { CompareFloatingBar } from "@/components/CompareFloatingBar";
 interface Wilayah {
   kodeWilayah: string;
   namaWilayah: string;
+}
+
+interface Asosiasi {
+  id: number;
+  nama: string;
+  singkatan: string;
 }
 
 const QUICK_FILTERS = [
@@ -41,8 +47,13 @@ export default function Page() {
 
   const [provinces, setProvinces] = useState<Wilayah[]>([]);
   const [kabupatens, setKabupatens] = useState<Wilayah[]>([]);
+  const [kecamatans, setKecamatans] = useState<Wilayah[]>([]);
+  const [asosiasiList, setAsosiasiList] = useState<Asosiasi[]>([]);
+  
   const [selectedProvinsi, setSelectedProvinsi] = useState("");
   const [selectedKabupaten, setSelectedKabupaten] = useState("");
+  const [selectedKecamatan, setSelectedKecamatan] = useState("");
+  const [selectedAsosiasi, setSelectedAsosiasi] = useState("");
   const [activeKodeWilayah, setActiveKodeWilayah] = useState("");
 
   const [page, setPage] = useState(1);
@@ -115,6 +126,8 @@ export default function Page() {
         setSearchQuery(parsed.searchQuery || "");
         setSelectedProvinsi(parsed.selectedProvinsi || "");
         setSelectedKabupaten(parsed.selectedKabupaten || "");
+        setSelectedKecamatan(parsed.selectedKecamatan || "");
+        setSelectedAsosiasi(parsed.selectedAsosiasi || "");
         setActiveKodeWilayah(parsed.activeKodeWilayah || "");
         
         if (parsed.scrollY) {
@@ -147,20 +160,25 @@ export default function Page() {
     if (!isRestored || sharedFavoritesMode) return;
     const saveState = () => {
       sessionStorage.setItem('si_coro_state', JSON.stringify({
-        data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, activeKodeWilayah,
+        data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, selectedKecamatan, selectedAsosiasi, activeKodeWilayah,
         scrollY: scrollYRef.current
       }));
     };
     saveState();
     return () => saveState();
-  }, [data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, activeKodeWilayah, isRestored]);
+  }, [data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, selectedKecamatan, selectedAsosiasi, activeKodeWilayah, isRestored]);
 
-  // Fetch Provinces on mount
+  // Fetch Provinces and Asosiasi on mount
   useEffect(() => {
     fetch("https://sikumbang.tapera.go.id/ajax/wilayah/get-provinsi")
       .then(res => res.json())
       .then(data => setProvinces(data))
       .catch(err => console.error("Failed to fetch provinces", err));
+
+    fetch("https://sikumbang.tapera.go.id/ajax/asosiasi/get")
+      .then(res => res.json())
+      .then(data => setAsosiasiList(data))
+      .catch(err => console.error("Failed to fetch asosiasi", err));
   }, []);
 
   // Fetch Kabupatens when Provinsi changes
@@ -175,6 +193,19 @@ export default function Page() {
     }
     setSelectedKabupaten("");
   }, [selectedProvinsi]);
+
+  // Fetch Kecamatans when Kabupaten changes
+  useEffect(() => {
+    if (selectedKabupaten) {
+      fetch(`https://sikumbang.tapera.go.id/ajax/wilayah/get-kecamatan/${selectedKabupaten}`)
+        .then(res => res.json())
+        .then(data => setKecamatans(data))
+        .catch(err => console.error("Failed to fetch kecamatans", err));
+    } else {
+      setKecamatans([]);
+    }
+    setSelectedKecamatan("");
+  }, [selectedKabupaten]);
 
   // Fetch Data
   useEffect(() => {
@@ -191,6 +222,9 @@ export default function Page() {
 
         if (activeKodeWilayah) {
           url += `&kodeWilayah=${activeKodeWilayah}`;
+        }
+        if (selectedAsosiasi) {
+          url += `&asosiasi=${selectedAsosiasi}`;
         }
         if (searchQuery) {
           url += `&keyword=${encodeURIComponent(searchQuery)}`;
@@ -214,7 +248,7 @@ export default function Page() {
     };
 
     fetchData();
-  }, [searchQuery, activeKodeWilayah, page, searchTrigger, isRestored, sharedFavoritesMode]);
+  }, [searchQuery, activeKodeWilayah, selectedAsosiasi, page, searchTrigger, isRestored, sharedFavoritesMode]);
 
   // Infinite Scroll Observer
   useEffect(() => {
@@ -236,7 +270,7 @@ export default function Page() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setSearchQuery(keyword);
-    setActiveKodeWilayah(selectedKabupaten || selectedProvinsi);
+    setActiveKodeWilayah(selectedKecamatan || selectedKabupaten || selectedProvinsi);
     setData([]); // clear old data to trigger skeleton
     lastFetchedPage.current = 0; // reset fetch tracker
     setPage(1); // reset to first page on new search
@@ -314,7 +348,7 @@ export default function Page() {
           </div>
 
           <form onSubmit={handleSearch} className="flex flex-col gap-4 bg-card p-6 rounded-3xl border shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="relative">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Provinsi</label>
                 <div className="relative">
@@ -345,6 +379,41 @@ export default function Page() {
                     <option value="">Semua Kabupaten / Kota</option>
                     {kabupatens.map(kab => (
                       <option key={kab.kodeWilayah} value={kab.kodeWilayah}>{kab.namaWilayah}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="relative">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Kecamatan</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <select
+                    className="w-full pl-10 pr-4 py-3 bg-background border-2 border-muted rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none font-medium disabled:opacity-50"
+                    value={selectedKecamatan}
+                    onChange={(e) => setSelectedKecamatan(e.target.value)}
+                    disabled={!selectedKabupaten || kecamatans.length === 0}
+                  >
+                    <option value="">Semua Kecamatan</option>
+                    {kecamatans.map(kec => (
+                      <option key={kec.kodeWilayah} value={kec.kodeWilayah}>{kec.namaWilayah}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="relative">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Asosiasi</label>
+                <div className="relative">
+                  <Buildings className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <select
+                    className="w-full pl-10 pr-4 py-3 bg-background border-2 border-muted rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 appearance-none font-medium"
+                    value={selectedAsosiasi}
+                    onChange={(e) => setSelectedAsosiasi(e.target.value)}
+                  >
+                    <option value="">Semua Asosiasi</option>
+                    {asosiasiList.map(aso => (
+                      <option key={aso.id} value={aso.id}>{aso.singkatan} - {aso.nama}</option>
                     ))}
                   </select>
                 </div>
@@ -408,6 +477,7 @@ export default function Page() {
                           setKabupatens(d);
                           const selKab = d.find((k: Wilayah) => k.kodeWilayah === qf.code);
                           if (selKab) setSelectedKabupaten(selKab.kodeWilayah);
+                          setSelectedKecamatan("");
                           setActiveKodeWilayah(qf.code);
                           setData([]);
                           setPage(1);
