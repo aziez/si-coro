@@ -4,13 +4,14 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, MapPin, Buildings, Bed, Bathtub, ArrowsOut, 
-  Phone, EnvelopeSimple, MapTrifold, CaretLeft, CaretRight, ShieldCheck, Heart
+import {
+  ArrowLeft, MapPin, Buildings, Bed, Bathtub, ArrowsOut,
+  Phone, EnvelopeSimple, MapTrifold, CaretLeft, CaretRight, ShieldCheck, Heart, Train, WarningCircle, Drop
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useFavorites } from '@/hooks/useFavorites';
+import { getDistanceToJakarta, getNearestStation } from '@/lib/geoUtils';
 
 interface DetailData {
   namaPerumahan: string;
@@ -25,6 +26,7 @@ interface DetailData {
     lat: number;
     lon: number;
   };
+  koordinatPerumahan?: string | null;
   kantorPemasaran: {
     alamat: string;
     nomor: string;
@@ -80,7 +82,10 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentHeroImage, setCurrentHeroImage] = useState(0);
-  
+
+  const [floodData, setFloodData] = useState<{ riskLevel: string, isFloodFree: boolean } | null>(null);
+  const [geoData, setGeoData] = useState<{ distanceToJakarta: number, nearestStation: { station: { name: string }, distance: number } } | null>(null);
+
   const { toggleFavorite, isFavorite } = useFavorites();
 
   useEffect(() => {
@@ -88,11 +93,45 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
       try {
         const res = await fetch(`https://sikumbang.tapera.go.id/lokasi-perumahan/${propertyId}/json`);
         const json = await res.json();
-        
+
+
         if (json.error) {
           setError(json.message || 'Data tidak ditemukan');
         } else {
           setData(json);
+
+          // Smart Insights
+          let lat: number | undefined;
+          let lon: number | undefined;
+
+          if (json.detail?.koordinat && typeof json.detail.koordinat.lat !== 'undefined') {
+            lat = parseFloat(json.detail.koordinat.lat);
+            lon = parseFloat(json.detail.koordinat.lon);
+          } else if (json.detail?.koordinatPerumahan) {
+            const parts = typeof json.detail.koordinatPerumahan === 'string'
+              ? json.detail.koordinatPerumahan.split(',')
+              : [];
+            lat = parts.length > 0 ? parseFloat(parts[0].trim()) : undefined;
+            lon = parts.length > 1 ? parseFloat(parts[1].trim()) : undefined;
+          }
+
+          if (lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon)) {
+            // Calculate Geo
+            setGeoData({
+              distanceToJakarta: getDistanceToJakarta(lat, lon),
+              nearestStation: getNearestStation(lat, lon)
+            });
+
+            // Fetch InaRisk
+            fetch(`/api/inarisk?lat=${lat}&lon=${lon}`)
+              .then(r => r.json())
+              .then(d => {
+                if (d.success) {
+                  setFloodData({ riskLevel: d.riskLevel, isFloodFree: d.isFloodFree });
+                }
+              })
+              .catch(e => console.error("InaRisk fetch error:", e));
+          }
         }
       } catch (err) {
         setError('Gagal mengambil data perumahan.');
@@ -137,6 +176,20 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
   const uniqueTipe = Array.from(new Map(bangunan.map(b => [b.tipe.id, b.tipe])).values());
   const allImages = detail.foto && detail.foto.length > 0 ? detail.foto : [''];
 
+  let mapLat = '';
+  let mapLon = '';
+  if (detail.koordinat && detail.koordinat.lat) {
+    mapLat = String(detail.koordinat.lat);
+    mapLon = String(detail.koordinat.lon);
+  } else if (detail.koordinatPerumahan && typeof detail.koordinatPerumahan === 'string') {
+    const parts = detail.koordinatPerumahan.split(',');
+    if (parts.length >= 2) {
+      mapLat = parts[0].trim();
+      mapLon = parts[1].trim();
+    }
+  }
+  const hasCoordinates = Boolean(mapLat && mapLon);
+
   return (
     <div className="min-h-screen bg-background pb-20">
       {/* Navigation Bar */}
@@ -175,14 +228,14 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
           {allImages.length > 1 && (
             <>
               <div className="absolute inset-0 flex items-center justify-between p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => setCurrentHeroImage(prev => prev === 0 ? allImages.length - 1 : prev - 1)} 
+                <button
+                  onClick={() => setCurrentHeroImage(prev => prev === 0 ? allImages.length - 1 : prev - 1)}
                   className="bg-background/80 hover:bg-background text-foreground p-3 rounded-full shadow-lg backdrop-blur-sm transition-all"
                 >
                   <CaretLeft className="w-6 h-6" />
                 </button>
-                <button 
-                  onClick={() => setCurrentHeroImage(prev => prev === allImages.length - 1 ? 0 : prev + 1)} 
+                <button
+                  onClick={() => setCurrentHeroImage(prev => prev === allImages.length - 1 ? 0 : prev + 1)}
                   className="bg-background/80 hover:bg-background text-foreground p-3 rounded-full shadow-lg backdrop-blur-sm transition-all"
                 >
                   <CaretRight className="w-6 h-6" />
@@ -213,9 +266,9 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                   ID: {detail.idLokasi}
                 </span>
 
-                {detail.koordinat && detail.koordinat.lat && detail.koordinat.lon && (
+                {hasCoordinates && (
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${detail.koordinat.lat},${detail.koordinat.lon}`}
+                    href={`https://www.google.com/maps/search/?api=1&query=${mapLat},${mapLon}`}
                     target="_blank"
                     rel="noreferrer"
                     className="px-4 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-sm font-semibold tracking-wider flex items-center gap-1.5 hover:bg-blue-500/20 transition-colors"
@@ -241,13 +294,12 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                     };
                     toggleFavorite(mappedData);
                   }}
-                  className={`px-4 py-1 rounded-full text-sm font-semibold tracking-wider flex items-center gap-1.5 transition-colors ${
-                    isFavorite(detail.idLokasi) 
-                      ? 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20' 
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  }`}
+                  className={`px-4 py-1 rounded-full text-sm font-semibold tracking-wider flex items-center gap-1.5 transition-colors ${isFavorite(detail.idLokasi)
+                    ? 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
                 >
-                  <Heart weight={isFavorite(detail.idLokasi) ? "fill" : "regular"} /> 
+                  <Heart weight={isFavorite(detail.idLokasi) ? "fill" : "regular"} />
                   {isFavorite(detail.idLokasi) ? "Tersimpan di Favorit" : "Simpan ke Favorit"}
                 </button>
               </div>
@@ -270,6 +322,70 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                 {detail.npwpPengembang && <p className="text-sm text-muted-foreground">NPWP: {detail.npwpPengembang}</p>}
               </div>
             </div>
+
+
+            {/* Smart Insights Section */}
+            {(geoData || floodData) && (
+              <div className="bg-card border border-border/50 rounded-2xl p-6 shadow-sm">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-primary" weight="fill" />
+                  Analisis Lokasi Pintar
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Jarak ke Jakarta */}
+                  {geoData && (
+                    <div className="flex items-start gap-3 p-4 bg-muted/30 rounded-xl border border-muted">
+                      <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                        <Buildings className="w-5 h-5 text-blue-600" weight="duotone" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Jarak ke Jakarta</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Sekitar <strong className="text-foreground">{geoData.distanceToJakarta.toFixed(1)} km</strong> dari Pusat Kota (Monas)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Jarak ke KRL */}
+                  {geoData && (
+                    <div className="flex items-start gap-3 p-4 bg-muted/30 rounded-xl border border-muted">
+                      <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
+                        <Train className="w-5 h-5 text-orange-600" weight="duotone" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Stasiun KRL Terdekat</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <strong className="text-foreground">{geoData.nearestStation.distance.toFixed(1)} km</strong> ke {geoData.nearestStation.station.name}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Status Banjir (inaRISK) */}
+                  {floodData && (
+                    <div className={`flex items-start gap-3 p-4 rounded-xl border md:col-span-2 ${floodData.isFloodFree ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'
+                      }`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${floodData.isFloodFree ? 'bg-green-500/20' : 'bg-red-500/20'
+                        }`}>
+                        {floodData.isFloodFree
+                          ? <ShieldCheck className="w-5 h-5 text-green-600" weight="duotone" />
+                          : <WarningCircle className="w-5 h-5 text-red-600" weight="duotone" />
+                        }
+                      </div>
+                      <div>
+                        <p className={`text-sm font-bold ${floodData.isFloodFree ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                          {floodData.isFloodFree ? 'Relatif Aman dari Banjir' : 'Berada di Kawasan Rawan Banjir'}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                          <Drop className="w-3 h-3" /> Berdasarkan Peta Risiko Banjir inaRISK BNPB (Tingkat: {floodData.riskLevel})
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sidebar: Kantor Pemasaran */}
@@ -279,7 +395,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                 <MapTrifold className="w-6 h-6 text-primary" weight="duotone" />
                 Kantor Pemasaran
               </h3>
-              
+
               {detail.kantorPemasaran && detail.kantorPemasaran.length > 0 ? (
                 <div className="space-y-6">
                   {detail.kantorPemasaran.map((kantor, idx) => (
@@ -287,7 +403,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                       <p className="text-sm font-medium leading-relaxed">
                         {kantor.alamat} {kantor.nomor ? `No. ${kantor.nomor}` : ''}
                       </p>
-                      
+
                       <div className="space-y-3">
                         {kantor.noTelp && (
                           <div className="flex items-center gap-3">
@@ -312,7 +428,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                       </div>
 
                       {kantor.noTelp && (
-                        <a 
+                        <a
                           href={`https://wa.me/62${kantor.noTelp.split(' ')[0].replace(/^0/, '')}`}
                           target="_blank"
                           rel="noreferrer"
@@ -339,14 +455,14 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Google Maps Iframe */}
             <div className="rounded-3xl overflow-hidden border border-border/50 shadow-sm h-[300px] md:h-[400px] bg-muted relative flex items-center justify-center">
-              {detail.koordinat && detail.koordinat.lat && detail.koordinat.lon ? (
-                <iframe 
-                  src={`https://maps.google.com/maps?q=${detail.koordinat.lat},${detail.koordinat.lon}&hl=id&z=15&output=embed`}
-                  width="100%" 
-                  height="100%" 
-                  style={{ border: 0 }} 
-                  allowFullScreen 
-                  loading="lazy" 
+              {hasCoordinates ? (
+                <iframe
+                  src={`https://maps.google.com/maps?q=${mapLat},${mapLon}&hl=id&z=15&output=embed`}
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  allowFullScreen
+                  loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                   className="absolute inset-0"
                 ></iframe>
@@ -357,14 +473,14 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                 </div>
               )}
             </div>
-            
+
             {/* Siteplan */}
             <div className="rounded-3xl overflow-hidden border border-border/50 shadow-sm h-[300px] md:h-[400px] bg-muted relative flex items-center justify-center p-4">
               {detail.siteplan ? (
-                <Image 
-                  src={getImageUrl(detail.siteplan)} 
+                <Image
+                  src={getImageUrl(detail.siteplan)}
                   alt={`Siteplan ${detail.namaPerumahan}`}
-                  fill 
+                  fill
                   className="object-contain p-4"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
@@ -395,7 +511,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
             <div className="space-y-12">
               {uniqueTipe.map((tipe) => (
                 <div key={tipe.id} className="bg-card border border-border/50 rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 flex flex-col">
-                  
+
                   {/* Header: Title & Info */}
                   <div className="p-6 md:p-10 border-b border-border/50 bg-gradient-to-b from-muted/30 to-transparent flex flex-col xl:flex-row justify-between gap-8">
                     <div>
@@ -450,7 +566,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                     {/* Foto Tampak */}
                     <div className="w-full h-[350px] md:w-1/2 md:h-[500px] relative bg-muted border-b md:border-b-0 md:border-r border-border/50 group overflow-hidden">
                       {tipe.fotoTampak ? (
-                        <Image 
+                        <Image
                           src={getImageUrl(tipe.fotoTampak)}
                           alt={`Tampak Depan ${tipe.nama}`}
                           fill
@@ -475,7 +591,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                     {/* Foto Denah */}
                     <div className="w-full h-[350px] md:w-1/2 md:h-[500px] relative bg-background group p-6 overflow-hidden">
                       {tipe.fotoDenah ? (
-                        <Image 
+                        <Image
                           src={getImageUrl(tipe.fotoDenah)}
                           alt={`Denah ${tipe.nama}`}
                           fill
@@ -504,7 +620,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                       <ShieldCheck className="w-8 h-8 text-primary" weight="duotone" />
                       Spesifikasi Bangunan Lengkap
                     </h4>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                       <div className="space-y-2">
                         <span className="text-primary font-bold tracking-widest text-sm uppercase flex items-center gap-2">
