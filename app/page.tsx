@@ -43,6 +43,63 @@ export default function Page() {
   const limit = 50;
 
   const loaderRef = useRef<HTMLDivElement>(null);
+  const scrollYRef = useRef(0);
+  const [isRestored, setIsRestored] = useState(false);
+  const lastFetchedPage = useRef(0);
+
+  // Restore State on Mount
+  useEffect(() => {
+    const savedState = sessionStorage.getItem('si_coro_state');
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState);
+        setData(parsed.data || []);
+        setPage(parsed.page || 1);
+        setTotalData(parsed.totalData || 0);
+        setKeyword(parsed.keyword || "");
+        setSearchQuery(parsed.searchQuery || "");
+        setSelectedProvinsi(parsed.selectedProvinsi || "");
+        setSelectedKabupaten(parsed.selectedKabupaten || "");
+        setActiveKodeWilayah(parsed.activeKodeWilayah || "");
+        lastFetchedPage.current = parsed.page || 0;
+        
+        if (parsed.scrollY) {
+          setTimeout(() => window.scrollTo(0, parsed.scrollY), 100);
+        }
+      } catch (e) {
+        console.error("Failed to restore state", e);
+      }
+    }
+    setIsRestored(true);
+  }, []);
+
+  // Track Scroll & Save State
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    const onScroll = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        scrollYRef.current = window.scrollY;
+      }, 100);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isRestored) return;
+    const saveState = () => {
+      sessionStorage.setItem('si_coro_state', JSON.stringify({
+        data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, activeKodeWilayah,
+        scrollY: scrollYRef.current
+      }));
+    };
+    saveState();
+    return () => saveState();
+  }, [data, page, totalData, keyword, searchQuery, selectedProvinsi, selectedKabupaten, activeKodeWilayah, isRestored]);
 
   // Fetch Provinces on mount
   useEffect(() => {
@@ -67,6 +124,9 @@ export default function Page() {
 
   // Fetch Data
   useEffect(() => {
+    if (!isRestored) return; // Wait for initial restore
+    if (page <= lastFetchedPage.current) return; // Skip if already fetched/restored
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -88,6 +148,7 @@ export default function Page() {
           setData(prev => [...prev, ...(json.data || [])]);
         }
         setTotalData(json.count?.totalLokasi || 0);
+        lastFetchedPage.current = page;
       } catch (error) {
         console.error("Failed to fetch data", error);
       } finally {
@@ -100,7 +161,7 @@ export default function Page() {
 
   // Infinite Scroll Observer
   useEffect(() => {
-    if (loading || showFavoritesOnly || data.length >= totalData) return;
+    if (!isRestored || loading || showFavoritesOnly || data.length >= totalData || totalData === 0) return;
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting) {
@@ -120,6 +181,7 @@ export default function Page() {
     setSearchQuery(keyword);
     setActiveKodeWilayah(selectedKabupaten || selectedProvinsi);
     setData([]); // clear old data to trigger skeleton
+    lastFetchedPage.current = 0; // reset fetch tracker
     setPage(1); // reset to first page on new search
   };
 

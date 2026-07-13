@@ -6,10 +6,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, MapPin, Buildings, Bed, Bathtub, ArrowsOut, 
-  Phone, EnvelopeSimple, MapTrifold, CaretLeft, CaretRight, ShieldCheck 
+  Phone, EnvelopeSimple, MapTrifold, CaretLeft, CaretRight, ShieldCheck, Heart
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useFavorites } from '@/hooks/useFavorites';
 
 interface DetailData {
   namaPerumahan: string;
@@ -79,6 +80,8 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentHeroImage, setCurrentHeroImage] = useState(0);
+  
+  const { toggleFavorite, isFavorite } = useFavorites();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -202,13 +205,51 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             <div>
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex flex-wrap items-center gap-3 mb-4">
                 <span className="px-3 py-1 bg-primary/10 text-primary text-sm font-semibold rounded-full border border-primary/20">
                   {detail.jenisPerumahan === 0 ? 'Rumah Tapak' : 'Rumah Susun'}
                 </span>
                 <span className="px-3 py-1 bg-secondary text-secondary-foreground text-sm font-medium rounded-full">
                   ID: {detail.idLokasi}
                 </span>
+
+                {detail.koordinat && detail.koordinat.lat && detail.koordinat.lon && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${detail.koordinat.lat},${detail.koordinat.lon}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-sm font-semibold tracking-wider flex items-center gap-1.5 hover:bg-blue-500/20 transition-colors"
+                  >
+                    <MapPin weight="bold" /> Cek Lokasi Maps
+                  </a>
+                )}
+
+                <button
+                  onClick={() => {
+                    // Map to Perumahan interface approximation
+                    const mappedData: any = {
+                      idLokasi: detail.idLokasi,
+                      namaPerumahan: detail.namaPerumahan,
+                      pengembang: { nama: detail.namaPengembang },
+                      jenisPerumahan: detail.jenisPerumahan === 0 ? "Rumah Tapak" : "Rumah Susun",
+                      wilayah: { kecamatan: detail.alamat },
+                      foto: detail.foto,
+                      koordinatPerumahan: `${detail.koordinat?.lat},${detail.koordinat?.lon}`,
+                      jumlahUnit: 0,
+                      jumlahUnitKomersil: 0,
+                      tipeRumah: []
+                    };
+                    toggleFavorite(mappedData);
+                  }}
+                  className={`px-4 py-1 rounded-full text-sm font-semibold tracking-wider flex items-center gap-1.5 transition-colors ${
+                    isFavorite(detail.idLokasi) 
+                      ? 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20' 
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  <Heart weight={isFavorite(detail.idLokasi) ? "fill" : "regular"} /> 
+                  {isFavorite(detail.idLokasi) ? "Tersimpan di Favorit" : "Simpan ke Favorit"}
+                </button>
               </div>
               <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-4 text-foreground">
                 {detail.namaPerumahan}

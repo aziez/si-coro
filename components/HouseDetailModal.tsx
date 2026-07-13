@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Perumahan } from './HouseCard';
@@ -15,6 +15,15 @@ interface HouseDetailModalProps {
 export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFavorite }: HouseDetailModalProps) {
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
   const [activeTab, setActiveTab] = useState<'info' | 'tipe'>('info');
+
+  useEffect(() => {
+    // Lock body scroll when modal mounts
+    document.body.style.overflow = 'hidden';
+    return () => {
+      // Restore body scroll when modal unmounts
+      document.body.style.overflow = '';
+    };
+  }, []);
 
   const hasImages = data.foto && data.foto.length > 0;
 
@@ -53,7 +62,7 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
           <X className="w-6 h-6" />
         </button>
 
-        <div className="flex flex-col md:flex-row h-full overflow-hidden">
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
           {/* Left Side: Images */}
           <div className="w-full md:w-1/2 lg:w-3/5 relative bg-muted flex-shrink-0 group">
             {hasImages ? (
@@ -109,32 +118,13 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
           </div>
 
           {/* Right Side: Content */}
-          <div className="w-full md:w-1/2 lg:w-2/5 flex flex-col h-full overflow-y-auto">
-            <div className="p-6 md:p-8 flex-1">
+          <div className="w-full md:w-1/2 lg:w-2/5 flex flex-col min-h-0">
+            <div className="p-6 md:p-8 flex-1 overflow-y-auto min-h-0">
               <div className="mb-6">
                 <div className="flex gap-2 mb-3">
                   <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider">
                     {data.jenisPerumahan}
                   </span>
-                  {data.koordinatPerumahan && (
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${data.koordinatPerumahan}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider flex items-center gap-1 hover:bg-blue-500/20 transition-colors"
-                    >
-                      <MapPin weight="bold" /> Cek Lokasi
-                    </a>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleFavorite?.();
-                    }}
-                    className="px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-semibold uppercase tracking-wider flex items-center gap-1 hover:bg-red-500/20 transition-colors ml-auto"
-                  >
-                    <Heart weight={isFavorite ? "fill" : "regular"} /> {isFavorite ? "Tersimpan" : "Simpan"}
-                  </button>
                 </div>
                 <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-2 text-foreground pr-10">
                   {data.namaPerumahan}
@@ -266,7 +256,7 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
               )}
             </div>
 
-            <div className="p-6 border-t bg-muted/20 flex gap-3">
+            <div className="p-6 border-t bg-muted/20 flex gap-3 shrink-0">
               <Button variant="outline" onClick={onClose} className="flex-1 rounded-xl py-6 text-base font-bold">
                 Tutup
               </Button>
