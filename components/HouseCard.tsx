@@ -1,7 +1,8 @@
 import React from 'react';
 import Image from 'next/image';
-import { MapPin, Heart, Users, Buildings } from '@phosphor-icons/react';
+import { MapPin, Heart, Users, Buildings, Train } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
+import { getDistanceToJakarta, getNearestStation } from '@/lib/geoUtils';
 
 export interface TipeRumah {
   id: number;
@@ -80,6 +81,22 @@ export function HouseCard({
   const hasSubsidi = data.tipeRumah?.some(t => t.status === 'subsidi');
   const hasKomersil = data.tipeRumah?.some(t => t.status === 'komersil');
 
+  // Calculate Distance to Jakarta
+  let distanceToJakarta: number | null = null;
+  let nearestStation: { station: { name: string }, distance: number } | null = null;
+
+  if (data.koordinatPerumahan && typeof data.koordinatPerumahan === 'string') {
+    const parts = data.koordinatPerumahan.split(',');
+    if (parts.length >= 2) {
+      const lat = parseFloat(parts[0].trim());
+      const lon = parseFloat(parts[1].trim());
+      if (!isNaN(lat) && !isNaN(lon)) {
+        distanceToJakarta = getDistanceToJakarta(lat, lon);
+        nearestStation = getNearestStation(lat, lon);
+      }
+    }
+  }
+
   return (
     <div
       onClick={onClick}
@@ -151,6 +168,20 @@ export function HouseCard({
             {data.wilayah?.kelurahan}, {data.wilayah?.kecamatan}, {data.wilayah?.kabupaten}, {data.wilayah?.provinsi}
           </span>
         </div>
+
+        {distanceToJakarta !== null && (
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md w-fit">
+            <Buildings className="h-3.5 w-3.5" />
+            <span>{distanceToJakarta.toFixed(1)} km ke Jakarta</span>
+          </div>
+        )}
+
+        {nearestStation && (
+          <div className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-md w-fit line-clamp-1">
+            <Train className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{nearestStation.distance.toFixed(1)} km ke Stasiun {nearestStation.station.name}</span>
+          </div>
+        )}
 
         <div className="mt-auto border-t pt-4">
           <p className="text-xs text-muted-foreground mb-1">Mulai dari</p>

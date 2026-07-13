@@ -15,21 +15,28 @@ export const KRL_STATIONS: Station[] = [
   { name: 'Stasiun Jakarta Kota', lat: -6.1375, lon: 106.8146 },
   { name: 'Stasiun Manggarai', lat: -6.2098, lon: 106.8502 },
   { name: 'Stasiun Sudirman', lat: -6.2023, lon: 106.8229 },
+  { name: 'Stasiun BNI City', lat: -6.2019, lon: 106.8197 },
+  { name: 'Stasiun Karet', lat: -6.2016, lon: 106.8166 },
   { name: 'Stasiun Tanah Abang', lat: -6.1852, lon: 106.8105 },
   { name: 'Stasiun Duri', lat: -6.1558, lon: 106.8009 },
+  { name: 'Stasiun Angke', lat: -6.1444, lon: 106.7981 },
   { name: 'Stasiun Kampung Bandan', lat: -6.1325, lon: 106.8322 },
 
-  // --- BOGOR / DEPOK LINE ---
-  { name: 'Stasiun Cikini', lat: -6.1985, lon: 106.8424 },
-  { name: 'Stasiun Gondangdia', lat: -6.1863, lon: 106.8327 },
-  { name: 'Stasiun Juanda', lat: -6.1668, lon: 106.8282 },
+  // --- BOGOR LINE (JAKARTA KOTA - BOGOR) ---
+  { name: 'Stasiun Jayakarta', lat: -6.1413, lon: 106.8225 },
+  { name: 'Stasiun Mangga Besar', lat: -6.1495, lon: 106.8250 },
   { name: 'Stasiun Sawah Besar', lat: -6.1605, lon: 106.8271 },
+  { name: 'Stasiun Juanda', lat: -6.1668, lon: 106.8282 },
+  { name: 'Stasiun Gondangdia', lat: -6.1863, lon: 106.8327 },
+  { name: 'Stasiun Cikini', lat: -6.1985, lon: 106.8424 },
   { name: 'Stasiun Tebet', lat: -6.2266, lon: 106.8584 },
   { name: 'Stasiun Cawang', lat: -6.2426, lon: 106.8587 },
   { name: 'Stasiun Duren Kalibata', lat: -6.2554, lon: 106.8553 },
+  { name: 'Stasiun Pasar Minggu Baru', lat: -6.2690, lon: 106.8492 },
   { name: 'Stasiun Pasar Minggu', lat: -6.2844, lon: 106.8441 },
   { name: 'Stasiun Tanjung Barat', lat: -6.3075, lon: 106.8386 },
   { name: 'Stasiun Lenteng Agung', lat: -6.3308, lon: 106.8349 },
+  { name: 'Stasiun Universitas Pancasila', lat: -6.3465, lon: 106.8335 },
   { name: 'Stasiun Universitas Indonesia', lat: -6.3606, lon: 106.8317 },
   { name: 'Stasiun Pondok Cina', lat: -6.3690, lon: 106.8315 },
   { name: 'Stasiun Depok Baru', lat: -6.3916, lon: 106.8185 },
@@ -39,11 +46,13 @@ export const KRL_STATIONS: Station[] = [
   { name: 'Stasiun Cilebut', lat: -6.5319, lon: 106.7909 },
   { name: 'Stasiun Bogor', lat: -6.5944, lon: 106.7892 },
 
-  // --- NMOBO / CIBINONG BRANCH (DARI CITAYAM) ---
+  // --- CABANG NAMBO (DARI CITAYAM) ---
+  { name: 'Stasiun Pondok Rajeg', lat: -6.4468, lon: 106.8267 },
   { name: 'Stasiun Cibinong', lat: -6.4789, lon: 106.8504 },
+  { name: 'Stasiun Gunung Putri', lat: -6.4526, lon: 106.8970 },
   { name: 'Stasiun Nambo', lat: -6.4632, lon: 106.9189 },
 
-  // --- BEKASI / CIKARANG LINE ---
+  // --- LINGKAR CIKARANG LINE (MANGGARAI/PASAR SENEN - CIKARANG) ---
   { name: 'Stasiun Jatinegara', lat: -6.2151, lon: 106.8680 },
   { name: 'Stasiun Klender', lat: -6.2135, lon: 106.9015 },
   { name: 'Stasiun Buaran', lat: -6.2197, lon: 106.9298 },
@@ -57,7 +66,16 @@ export const KRL_STATIONS: Station[] = [
   { name: 'Stasiun Metland Telagamurni', lat: -6.2617, lon: 107.1128 },
   { name: 'Stasiun Cikarang', lat: -6.2612, lon: 107.1444 },
 
-  // --- RANGKASBITUNG LINE (SERPONG / TANGERANG SELATAN) ---
+  // --- JALUR LINGKAR UTARA & PASAR SENEN (MANGGARAI - KAMPUNG BANDAN) ---
+  { name: 'Stasiun Matraman', lat: -6.2114, lon: 106.8576 },
+  { name: 'Stasiun Pondok Jati', lat: -6.2084, lon: 106.8619 },
+  { name: 'Stasiun Kramat', lat: -6.1936, lon: 106.8558 },
+  { name: 'Stasiun Gang Sentiong', lat: -6.1849, lon: 106.8504 },
+  { name: 'Stasiun Pasar Senen', lat: -6.1744, lon: 106.8443 },
+  { name: 'Stasiun Kemayoran', lat: -6.1624, lon: 106.8398 },
+  { name: 'Stasiun Rajawali', lat: -6.1449, lon: 106.8364 },
+
+  // --- RANGKASBITUNG LINE (TANAH ABANG - RANGKASBITUNG) ---
   { name: 'Stasiun Palmerah', lat: -6.2076, lon: 106.7972 },
   { name: 'Stasiun Kebayoran', lat: -6.2372, lon: 106.7828 },
   { name: 'Stasiun Pondok Ranji', lat: -6.2731, lon: 106.7455 },
@@ -67,9 +85,18 @@ export const KRL_STATIONS: Station[] = [
   { name: 'Stasiun Serpong', lat: -6.3188, lon: 106.6627 },
   { name: 'Stasiun Cisauk', lat: -6.3236, lon: 106.6429 },
   { name: 'Stasiun Cicayur', lat: -6.3255, lon: 106.6111 },
+  { name: 'Stasiun Jatake', lat: -6.3242, lon: 106.5912 },
   { name: 'Stasiun Parung Panjang', lat: -6.3189, lon: 106.5684 },
+  { name: 'Stasiun Cilejit', lat: -6.3211, lon: 106.4952 },
+  { name: 'Stasiun Daru', lat: -6.3276, lon: 106.4592 },
+  { name: 'Stasiun Tenjo', lat: -6.3298, lon: 106.4024 },
+  { name: 'Stasiun Tigaraksa', lat: -6.3275, lon: 106.3688 },
+  { name: 'Stasiun Cikoya', lat: -6.3244, lon: 106.3475 },
+  { name: 'Stasiun Maja', lat: -6.3323, lon: 106.3005 },
+  { name: 'Stasiun Citeras', lat: -6.3314, lon: 106.1969 },
+  { name: 'Stasiun Rangkasbitung', lat: -6.3536, lon: 106.2464 },
 
-  // --- TANGERANG LINE ---
+  // --- TANGERANG LINE (DURI - TANGERANG) ---
   { name: 'Stasiun Grogol', lat: -6.1627, lon: 106.7876 },
   { name: 'Stasiun Pesing', lat: -6.1601, lon: 106.7667 },
   { name: 'Stasiun Taman Kota', lat: -6.1607, lon: 106.7441 },
@@ -81,16 +108,11 @@ export const KRL_STATIONS: Station[] = [
   { name: 'Stasiun Tanah Tinggi', lat: -6.1751, lon: 106.6508 },
   { name: 'Stasiun Tangerang', lat: -6.1756, lon: 106.6322 },
 
-  // --- LOOP LINE / JALUR LINGKAR BARAT & UTARA ---
-  { name: 'Stasiun Karet', lat: -6.2016, lon: 106.8166 },
-  { name: 'Stasiun BNI City', lat: -6.2019, lon: 106.8197 },
-  { name: 'Stasiun Palmerah', lat: -6.2076, lon: 106.7972 },
-  { name: 'Stasiun Angke', lat: -6.1444, lon: 106.7981 },
-  { name: 'Stasiun Rajawali', lat: -6.1449, lon: 106.8364 },
-  { name: 'Stasiun Kemayoran', lat: -6.1624, lon: 106.8398 },
-  { name: 'Stasiun Kramat', lat: -6.1936, lon: 106.8558 },
-  { name: 'Stasiun Pondok Jati', lat: -6.2084, lon: 106.8619 }
+  // --- TANJUNG PRIOK LINE (JAKARTA KOTA - TANJUNG PRIOK) ---
+  { name: 'Stasiun Ancol', lat: -6.1284, lon: 106.8488 },
+  { name: 'Stasiun Tanjung Priok', lat: -6.1111, lon: 106.8811 }
 ];
+
 
 /**
  * Calculates straight-line distance between two coordinates in kilometers

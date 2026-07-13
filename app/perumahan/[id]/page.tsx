@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useFavorites } from '@/hooks/useFavorites';
 import { getDistanceToJakarta, getNearestStation } from '@/lib/geoUtils';
+import KprCalculator from '@/components/KprCalculator';
+import ShareButton from '@/components/ShareButton';
 
 interface DetailData {
   namaPerumahan: string;
@@ -302,6 +304,11 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                   <Heart weight={isFavorite(detail.idLokasi) ? "fill" : "regular"} />
                   {isFavorite(detail.idLokasi) ? "Tersimpan di Favorit" : "Simpan ke Favorit"}
                 </button>
+
+                <ShareButton 
+                  title={`Perumahan ${detail.namaPerumahan}`} 
+                  text={`Lihat rumah impian di perumahan ${detail.namaPerumahan} yang dikembangkan oleh ${detail.namaPengembang}.`} 
+                />
               </div>
               <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-4 text-foreground">
                 {detail.namaPerumahan}
@@ -661,6 +668,11 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
           )}
         </section>
 
+        {uniqueTipe.length > 0 && (
+          <section className="pt-8 border-t border-border/50">
+            <KprCalculator tipeRumahList={uniqueTipe} />
+          </section>
+        )}
       </main>
     </div>
   );
