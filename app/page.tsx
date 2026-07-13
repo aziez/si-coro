@@ -7,7 +7,9 @@ import { MagnifyingGlass, Funnel, Moon, Sun, CaretLeft, CaretRight, MapPin, Hear
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useCompare } from "@/hooks/useCompare";
 import ShareButton from "@/components/ShareButton";
+import { CompareFloatingBar } from "@/components/CompareFloatingBar";
 
 interface Wilayah {
   kodeWilayah: string;
@@ -24,6 +26,7 @@ const QUICK_FILTERS = [
 export default function Page() {
   const { theme, setTheme } = useTheme();
   const { favorites, toggleFavorite, isFavorite, addMultipleFavorites } = useFavorites();
+  const { compareList, toggleCompare, isCompared, clearCompare } = useCompare();
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sharedFavoritesMode, setSharedFavoritesMode] = useState(false);
   const [sharedData, setSharedData] = useState<Perumahan[]>([]);
@@ -466,6 +469,8 @@ export default function Page() {
                   onClick={() => setSelectedHouse(item)}
                   isFavorite={isFavorite(item.idLokasi)}
                   onToggleFavorite={() => toggleFavorite(item)}
+                  isCompared={isCompared(item.idLokasi)}
+                  onToggleCompare={() => toggleCompare(item)}
                 />
               ))}
             </div>
@@ -496,6 +501,12 @@ export default function Page() {
           </div>
         )}
       </main>
+
+      <CompareFloatingBar 
+        compareList={compareList} 
+        onRemove={toggleCompare} 
+        onClear={clearCompare} 
+      />
 
       {/* Detail Modal */}
       {selectedHouse && (

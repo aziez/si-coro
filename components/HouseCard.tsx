@@ -1,6 +1,6 @@
 import React from 'react';
 import Image from 'next/image';
-import { MapPin, Heart, Users, Buildings, Train } from '@phosphor-icons/react';
+import { MapPin, Heart, Users, Buildings, Train, Scales } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getDistanceToJakarta, getNearestStation } from '@/lib/geoUtils';
 
@@ -52,12 +52,16 @@ export function HouseCard({
   data,
   onClick,
   isFavorite = false,
-  onToggleFavorite
+  onToggleFavorite,
+  isCompared = false,
+  onToggleCompare
 }: {
   data: Perumahan;
   onClick?: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: (e: React.MouseEvent) => void;
+  isCompared?: boolean;
+  onToggleCompare?: (e: React.MouseEvent) => void;
 }) {
   const imageUrl = data.foto && data.foto.length > 0 ? data.foto[0] : '';
   let validImageUrl = imageUrl;
@@ -102,18 +106,35 @@ export function HouseCard({
       onClick={onClick}
       className={cn("group flex flex-col overflow-hidden rounded-2xl bg-card border shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 relative", onClick && "cursor-pointer")}
     >
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleFavorite?.(e);
-        }}
-        className="absolute top-3 right-3 z-10 p-2 rounded-full bg-background/80 backdrop-blur shadow-sm hover:scale-110 transition-transform"
-      >
-        <Heart
-          weight={isFavorite ? "fill" : "regular"}
-          className={cn("w-5 h-5 transition-colors", isFavorite ? "text-red-500" : "text-muted-foreground")}
-        />
-      </button>
+      <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite?.(e);
+          }}
+          className="p-2 rounded-full bg-background/80 backdrop-blur shadow-sm hover:scale-110 transition-transform"
+          title="Simpan ke Favorit"
+        >
+          <Heart
+            weight={isFavorite ? "fill" : "regular"}
+            className={cn("w-5 h-5 transition-colors", isFavorite ? "text-red-500" : "text-muted-foreground")}
+          />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCompare?.(e);
+          }}
+          className="p-2 rounded-full bg-background/80 backdrop-blur shadow-sm hover:scale-110 transition-transform"
+          title="Bandingkan Properti"
+        >
+          <Scales
+            weight={isCompared ? "fill" : "regular"}
+            className={cn("w-5 h-5 transition-colors", isCompared ? "text-primary" : "text-muted-foreground")}
+          />
+        </button>
+      </div>
 
       <div className="relative aspect-video w-full overflow-hidden bg-muted flex items-center justify-center">
         {validImageUrl ? (
