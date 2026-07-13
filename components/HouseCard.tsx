@@ -1,5 +1,6 @@
 import React from 'react';
-import { MapPin, Heart, Users } from '@phosphor-icons/react';
+import Image from 'next/image';
+import { MapPin, Heart, Users, Buildings } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 export interface TipeRumah {
@@ -46,13 +47,13 @@ export interface Perumahan {
   };
 }
 
-export function HouseCard({ 
-  data, 
+export function HouseCard({
+  data,
   onClick,
   isFavorite = false,
   onToggleFavorite
-}: { 
-  data: Perumahan; 
+}: {
+  data: Perumahan;
   onClick?: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: (e: React.MouseEvent) => void;
@@ -80,33 +81,45 @@ export function HouseCard({
   const hasKomersil = data.tipeRumah?.some(t => t.status === 'komersil');
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className={cn("group flex flex-col overflow-hidden rounded-2xl bg-card border shadow-sm transition-all hover:shadow-md hover:-translate-y-1 duration-300 relative", onClick && "cursor-pointer")}
     >
-      <button 
+      <button
         onClick={(e) => {
           e.stopPropagation();
           onToggleFavorite?.(e);
         }}
         className="absolute top-3 right-3 z-10 p-2 rounded-full bg-background/80 backdrop-blur shadow-sm hover:scale-110 transition-transform"
       >
-        <Heart 
-          weight={isFavorite ? "fill" : "regular"} 
-          className={cn("w-5 h-5 transition-colors", isFavorite ? "text-red-500" : "text-muted-foreground")} 
+        <Heart
+          weight={isFavorite ? "fill" : "regular"}
+          className={cn("w-5 h-5 transition-colors", isFavorite ? "text-red-500" : "text-muted-foreground")}
         />
       </button>
 
-      <div className="relative aspect-video w-full overflow-hidden bg-muted">
-        <img
-          src={validImageUrl}
-          alt={data.namaPerumahan}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image+Not+Found';
-          }}
-        />
+      <div className="relative aspect-video w-full overflow-hidden bg-muted flex items-center justify-center">
+        {validImageUrl ? (
+          <Image
+            src={validImageUrl}
+            alt={data.namaPerumahan}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+              if (e.target && (e.target as any).nextElementSibling) {
+                (e.target as any).nextElementSibling.style.display = 'flex';
+              }
+            }}
+          />
+        ) : null}
+
+        {/* Fallback Icon */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/50 bg-muted" style={{ display: validImageUrl ? 'none' : 'flex' }}>
+          <Buildings weight="duotone" className="w-12 h-12 mb-2" />
+          <span className="text-xs font-medium">Foto tidak tersedia</span>
+        </div>
+
         <div className="absolute top-3 left-3 flex gap-2 flex-wrap">
           {hasSubsidi && (
             <span className="rounded-full bg-emerald-500/90 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm shadow-sm">

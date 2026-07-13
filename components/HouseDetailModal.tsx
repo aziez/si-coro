@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Perumahan } from './HouseCard';
 import { X, MapPin, Users, Phone, EnvelopeSimple, Buildings, CaretLeft, CaretRight, CheckCircle, Bed, Bathtub, ArrowsOut, Heart } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -13,9 +14,9 @@ interface HouseDetailModalProps {
 export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFavorite }: HouseDetailModalProps) {
   const [currentImageIdx, setCurrentImageIdx] = useState(0);
   const [activeTab, setActiveTab] = useState<'info' | 'tipe'>('info');
-  
+
   const hasImages = data.foto && data.foto.length > 0;
-  
+
   const formatRupiah = (number: number) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -38,13 +39,13 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div 
-        className="fixed inset-0" 
+      <div
+        className="fixed inset-0"
         onClick={onClose}
       />
       <div className="relative w-full max-w-5xl bg-card rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 border">
         {/* Header (Mobile-friendly close button) */}
-        <button 
+        <button
           onClick={onClose}
           className="absolute top-4 right-4 z-10 bg-background/50 hover:bg-background/80 backdrop-blur-md p-2 rounded-full text-foreground transition-colors"
         >
@@ -56,14 +57,26 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
           <div className="w-full md:w-1/2 lg:w-3/5 relative bg-muted flex-shrink-0 group">
             {hasImages ? (
               <>
-                <img 
-                  src={data.foto[currentImageIdx]} 
-                  alt={`${data.namaPerumahan} - Foto ${currentImageIdx + 1}`}
-                  className="w-full h-64 md:h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/800x600?text=Image+Not+Found';
-                  }}
-                />
+                {/* Image container */}
+                <div className="w-full h-64 md:h-full relative flex items-center justify-center bg-muted">
+                  <Image 
+                    src={data.foto[currentImageIdx].startsWith('http') ? data.foto[currentImageIdx] : `https://sikumbang.tapera.go.id${data.foto[currentImageIdx].startsWith('/') ? '' : '/'}${data.foto[currentImageIdx]}`}
+                    alt={`${data.namaPerumahan} - Foto ${currentImageIdx + 1}`}
+                    fill
+                    className="object-cover absolute inset-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      if (e.target && (e.target as any).nextElementSibling) {
+                        (e.target as any).nextElementSibling.style.display = 'flex';
+                      }
+                    }}
+                  />
+                  {/* Fallback Icon */}
+                  <div className="absolute inset-0 flex-col items-center justify-center text-muted-foreground/50 bg-muted" style={{ display: 'none' }}>
+                    <Buildings weight="duotone" className="w-16 h-16 mb-2" />
+                    <span className="text-sm font-medium">Foto tidak tersedia</span>
+                  </div>
+                </div>
                 {data.foto.length > 1 && (
                   <div className="absolute inset-0 flex items-center justify-between p-4 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={prevImage} className="bg-background/80 hover:bg-background text-foreground p-2 rounded-full shadow-lg backdrop-blur-sm transition-all">
@@ -78,7 +91,7 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
                 {data.foto.length > 1 && (
                   <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
                     {data.foto.map((_, idx) => (
-                      <button 
+                      <button
                         key={idx}
                         onClick={() => setCurrentImageIdx(idx)}
                         className={`w-2 h-2 rounded-full transition-all ${idx === currentImageIdx ? 'bg-white w-4' : 'bg-white/50'}`}
@@ -103,7 +116,7 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
                     {data.jenisPerumahan}
                   </span>
                   {data.koordinatPerumahan && (
-                    <a 
+                    <a
                       href={`https://www.google.com/maps/search/?api=1&query=${data.koordinatPerumahan}`}
                       target="_blank"
                       rel="noreferrer"
@@ -135,14 +148,14 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
 
               {/* Custom Tabs */}
               <div className="flex border-b mb-6">
-                <button 
+                <button
                   className={`pb-3 px-4 font-medium text-sm transition-colors relative ${activeTab === 'info' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                   onClick={() => setActiveTab('info')}
                 >
                   Informasi
                   {activeTab === 'info' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />}
                 </button>
-                <button 
+                <button
                   className={`pb-3 px-4 font-medium text-sm transition-colors relative ${activeTab === 'tipe' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                   onClick={() => setActiveTab('tipe')}
                 >
@@ -200,14 +213,14 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
-                     <div className="bg-card border rounded-2xl p-4 flex flex-col items-center justify-center text-center">
-                        <span className="text-3xl font-bold text-primary mb-1">{data.jumlahUnit}</span>
-                        <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Unit Tersedia</span>
-                     </div>
-                     <div className="bg-card border rounded-2xl p-4 flex flex-col items-center justify-center text-center">
-                        <span className="text-3xl font-bold text-blue-500 mb-1">{data.jumlahUnitKomersil}</span>
-                        <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Unit Komersil</span>
-                     </div>
+                    <div className="bg-card border rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+                      <span className="text-3xl font-bold text-primary mb-1">{data.jumlahUnit}</span>
+                      <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Unit Tersedia</span>
+                    </div>
+                    <div className="bg-card border rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+                      <span className="text-3xl font-bold text-blue-500 mb-1">{data.jumlahUnitKomersil}</span>
+                      <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Unit Komersil</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -230,9 +243,9 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
                         </div>
 
                         <div className="flex flex-wrap gap-4 mb-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1.5"><ArrowsOut className="w-4 h-4"/> Luas: {tipe.luasBangunan}/{tipe.luasTanah} m²</div>
-                          <div className="flex items-center gap-1.5"><Bed className="w-4 h-4"/> {tipe.kamarTidur} Kamar</div>
-                          <div className="flex items-center gap-1.5"><Bathtub className="w-4 h-4"/> {tipe.kamarMandi} KM</div>
+                          <div className="flex items-center gap-1.5"><ArrowsOut className="w-4 h-4" /> Luas: {tipe.luasBangunan}/{tipe.luasTanah} m²</div>
+                          <div className="flex items-center gap-1.5"><Bed className="w-4 h-4" /> {tipe.kamarTidur} Kamar</div>
+                          <div className="flex items-center gap-1.5"><Bathtub className="w-4 h-4" /> {tipe.kamarMandi} KM</div>
                         </div>
 
                         <div className="space-y-2 text-xs text-muted-foreground border-t pt-3 mt-3">
@@ -251,7 +264,7 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
                 </div>
               )}
             </div>
-            
+
             <div className="p-6 border-t bg-muted/20">
               <Button onClick={onClose} className="w-full rounded-xl py-6 text-base font-bold">
                 Tutup Detail
