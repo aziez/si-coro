@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Perumahan } from './HouseCard';
 import { X, MapPin, Users, Phone, EnvelopeSimple, Buildings, CaretLeft, CaretRight, CheckCircle, Bed, Bathtub, ArrowsOut, Heart } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -265,10 +266,15 @@ export function HouseDetailModal({ data, onClose, isFavorite = false, onToggleFa
               )}
             </div>
 
-            <div className="p-6 border-t bg-muted/20">
-              <Button onClick={onClose} className="w-full rounded-xl py-6 text-base font-bold">
-                Tutup Detail
+            <div className="p-6 border-t bg-muted/20 flex gap-3">
+              <Button variant="outline" onClick={onClose} className="flex-1 rounded-xl py-6 text-base font-bold">
+                Tutup
               </Button>
+              <Link href={`/perumahan/${data.idLokasi}`} className="flex-1" onClick={onClose}>
+                <Button className="w-full rounded-xl py-6 text-base font-bold bg-primary hover:bg-primary/90">
+                  Lihat Detail Selengkapnya
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
