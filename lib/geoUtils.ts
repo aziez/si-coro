@@ -154,3 +154,422 @@ export function getNearestStation(lat: number, lon: number): { station: Station;
 export function getDistanceToJakarta(lat: number, lon: number): number {
   return calculateDistance(lat, lon, JAKARTA_CENTER.lat, JAKARTA_CENTER.lon);
 }
+
+/**
+ * Returns the top N nearest KRL stations by straight-line distance
+ * Used as candidates for actual road routing (OSRM)
+ */
+export function getNearestStations(
+  lat: number,
+  lon: number,
+  limit = 3
+): { station: Station; straightDistanceKm: number }[] {
+  return KRL_STATIONS.map((station) => ({
+    station,
+    straightDistanceKm: calculateDistance(lat, lon, station.lat, station.lon),
+  }))
+    .sort((a, b) => a.straightDistanceKm - b.straightDistanceKm)
+    .slice(0, limit);
+}
+
+// ─── KRL Network Graph & Official Fare Calculation ───────────────────────────
+
+export interface KrlLineDefinition {
+  id: string;
+  name: string;
+  color: string;
+  stations: string[];
+}
+
+export const KRL_LINES_NETWORK: KrlLineDefinition[] = [
+  {
+    id: "bogor",
+    name: "Lin Bogor",
+    color: "#e74c3c",
+    stations: [
+      "Stasiun Jakarta Kota",
+      "Stasiun Jayakarta",
+      "Stasiun Mangga Besar",
+      "Stasiun Sawah Besar",
+      "Stasiun Juanda",
+      "Stasiun Gondangdia",
+      "Stasiun Cikini",
+      "Stasiun Manggarai",
+      "Stasiun Tebet",
+      "Stasiun Cawang",
+      "Stasiun Duren Kalibata",
+      "Stasiun Pasar Minggu Baru",
+      "Stasiun Pasar Minggu",
+      "Stasiun Tanjung Barat",
+      "Stasiun Lenteng Agung",
+      "Stasiun Universitas Pancasila",
+      "Stasiun Universitas Indonesia",
+      "Stasiun Pondok Cina",
+      "Stasiun Depok Baru",
+      "Stasiun Depok",
+      "Stasiun Citayam",
+      "Stasiun Bojong Gede",
+      "Stasiun Cilebut",
+      "Stasiun Bogor",
+    ],
+  },
+  {
+    id: "nambo",
+    name: "Lin Nambo",
+    color: "#f1c40f",
+    stations: [
+      "Stasiun Citayam",
+      "Stasiun Pondok Rajeg",
+      "Stasiun Cibinong",
+      "Stasiun Gunung Putri",
+      "Stasiun Nambo",
+    ],
+  },
+  {
+    id: "cikarang-selatan",
+    name: "Lin Cikarang (Via Manggarai)",
+    color: "#3498db",
+    stations: [
+      "Stasiun Angke",
+      "Stasiun Duri",
+      "Stasiun Tanah Abang",
+      "Stasiun Karet",
+      "Stasiun BNI City",
+      "Stasiun Sudirman",
+      "Stasiun Manggarai",
+      "Stasiun Matraman",
+      "Stasiun Jatinegara",
+      "Stasiun Klender",
+      "Stasiun Buaran",
+      "Stasiun Klender Baru",
+      "Stasiun Cakung",
+      "Stasiun Kranji",
+      "Stasiun Bekasi",
+      "Stasiun Bekasi Timur",
+      "Stasiun Tambun",
+      "Stasiun Cibitung",
+      "Stasiun Metland Telagamurni",
+      "Stasiun Cikarang",
+    ],
+  },
+  {
+    id: "cikarang-utara",
+    name: "Lin Cikarang (Via Pasar Senen)",
+    color: "#2980b9",
+    stations: [
+      "Stasiun Kampung Bandan",
+      "Stasiun Rajawali",
+      "Stasiun Kemayoran",
+      "Stasiun Pasar Senen",
+      "Stasiun Gang Sentiong",
+      "Stasiun Kramat",
+      "Stasiun Pondok Jati",
+      "Stasiun Jatinegara",
+    ],
+  },
+  {
+    id: "rangkasbitung",
+    name: "Lin Rangkasbitung",
+    color: "#2ecc71",
+    stations: [
+      "Stasiun Tanah Abang",
+      "Stasiun Palmerah",
+      "Stasiun Kebayoran",
+      "Stasiun Pondok Ranji",
+      "Stasiun Jurang Mangu",
+      "Stasiun Sudimara",
+      "Stasiun Rawa Buntu",
+      "Stasiun Serpong",
+      "Stasiun Cisauk",
+      "Stasiun Cicayur",
+      "Stasiun Jatake",
+      "Stasiun Parung Panjang",
+      "Stasiun Cilejit",
+      "Stasiun Daru",
+      "Stasiun Tenjo",
+      "Stasiun Tigaraksa",
+      "Stasiun Cikoya",
+      "Stasiun Maja",
+      "Stasiun Citeras",
+      "Stasiun Rangkasbitung",
+    ],
+  },
+  {
+    id: "tangerang",
+    name: "Lin Tangerang",
+    color: "#9b59b6",
+    stations: [
+      "Stasiun Duri",
+      "Stasiun Grogol",
+      "Stasiun Pesing",
+      "Stasiun Taman Kota",
+      "Stasiun Bojong Indah",
+      "Stasiun Rawa Buaya",
+      "Stasiun Kalideres",
+      "Stasiun Poris",
+      "Stasiun Batu Ceper",
+      "Stasiun Tanah Tinggi",
+      "Stasiun Tangerang",
+    ],
+  },
+  {
+    id: "tanjung-priok",
+    name: "Lin Tanjung Priok",
+    color: "#e67e22",
+    stations: [
+      "Stasiun Jakarta Kota",
+      "Stasiun Kampung Bandan",
+      "Stasiun Ancol",
+      "Stasiun Tanjung Priok",
+    ],
+  },
+];
+
+export const POPULAR_WORK_STATIONS = [
+  "Stasiun Sudirman",
+  "Stasiun Tanah Abang",
+  "Stasiun Manggarai",
+  "Stasiun Gondangdia",
+  "Stasiun Juanda",
+  "Stasiun Jakarta Kota",
+  "Stasiun Tebet",
+  "Stasiun Cawang",
+  "Stasiun Palmerah",
+  "Stasiun Kebayoran",
+  "Stasiun Duri",
+  "Stasiun Pasar Senen",
+  "Stasiun Jatinegara",
+];
+
+export interface KrlRouteSummary {
+  fromStation: string;
+  toStation: string;
+  railDistanceKm: number;
+  railDurationMinutes: number;
+  fareOneWay: number;
+  transits: string[];
+  linesUsed: string[];
+  stationCount: number;
+  pathCoordinates: [number, number][];
+}
+
+/**
+ * Official KAI Commuter Jabodetabek Tariff Formula:
+ * Rp 3.000 for the first 1-25 km, plus Rp 1.000 for every subsequent 10 km (or fraction thereof).
+ */
+export function calculateKrlFare(railDistanceKm: number): number {
+  if (railDistanceKm <= 0) return 3000;
+  if (railDistanceKm <= 25) return 3000;
+  const extraKm = railDistanceKm - 25;
+  return 3000 + Math.ceil(extraKm / 10) * 1000;
+}
+
+/**
+ * Finds shortest rail path & transit stations between two KRL stations
+ * using Dijkstra over the KRL Jabodetabek station network.
+ */
+export function calculateKrlRoute(
+  fromStationName: string,
+  toStationName: string
+): KrlRouteSummary | null {
+  const stationMap = new Map<string, Station>(
+    KRL_STATIONS.map((s) => [s.name, s])
+  );
+  if (!stationMap.has(fromStationName) || !stationMap.has(toStationName)) {
+    return null;
+  }
+
+  if (fromStationName === toStationName) {
+    const st = stationMap.get(fromStationName)!;
+    return {
+      fromStation: fromStationName,
+      toStation: toStationName,
+      railDistanceKm: 0,
+      railDurationMinutes: 0,
+      fareOneWay: 3000,
+      transits: [],
+      linesUsed: [],
+      stationCount: 0,
+      pathCoordinates: [[st.lat, st.lon]],
+    };
+  }
+
+  interface Edge {
+    to: string;
+    lineName: string;
+    distanceKm: number;
+  }
+
+  const adjacency = new Map<string, Edge[]>();
+  const addEdge = (a: string, b: string, lineName: string) => {
+    const stA = stationMap.get(a);
+    const stB = stationMap.get(b);
+    if (!stA || !stB) return;
+    // Rail track curvature factor (~1.12x segment straight distance between adjacent stations)
+    const dist = calculateDistance(stA.lat, stA.lon, stB.lat, stB.lon) * 1.12;
+    if (!adjacency.has(a)) adjacency.set(a, []);
+    if (!adjacency.has(b)) adjacency.set(b, []);
+    adjacency.get(a)!.push({ to: b, lineName, distanceKm: dist });
+    adjacency.get(b)!.push({ to: a, lineName, distanceKm: dist });
+  };
+
+  for (const line of KRL_LINES_NETWORK) {
+    for (let i = 0; i < line.stations.length - 1; i++) {
+      addEdge(line.stations[i], line.stations[i + 1], line.name);
+    }
+  }
+
+  // State: stationName
+  const distMap = new Map<string, number>();
+  const prevMap = new Map<
+    string,
+    { prevStation: string; lineName: string; segmentKm: number }
+  >();
+  const visited = new Set<string>();
+
+  distMap.set(fromStationName, 0);
+
+  while (true) {
+    let current: string | null = null;
+    let bestDist = Infinity;
+    for (const [st, d] of distMap.entries()) {
+      if (!visited.has(st) && d < bestDist) {
+        bestDist = d;
+        current = st;
+      }
+    }
+
+    if (!current || current === toStationName) break;
+    visited.add(current);
+
+    const currentPrev = prevMap.get(current);
+    const edges = adjacency.get(current) ?? [];
+    for (const edge of edges) {
+      if (visited.has(edge.to)) continue;
+      // Add small penalty for changing lines so same-line routes are preferred
+      const lineChangePenalty =
+        currentPrev && currentPrev.lineName !== edge.lineName ? 1.5 : 0;
+      const candidateCost = bestDist + edge.distanceKm + lineChangePenalty;
+      if (candidateCost < (distMap.get(edge.to) ?? Infinity)) {
+        distMap.set(edge.to, candidateCost);
+        prevMap.set(edge.to, {
+          prevStation: current,
+          lineName: edge.lineName,
+          segmentKm: edge.distanceKm,
+        });
+      }
+    }
+  }
+
+  if (!prevMap.has(toStationName)) return null;
+
+  const pathStations: string[] = [toStationName];
+  const segmentLines: string[] = [];
+  let totalRailKm = 0;
+  let cursor = toStationName;
+
+  while (cursor !== fromStationName) {
+    const step = prevMap.get(cursor);
+    if (!step) break;
+    totalRailKm += step.segmentKm;
+    segmentLines.unshift(step.lineName);
+    pathStations.unshift(step.prevStation);
+    cursor = step.prevStation;
+  }
+
+  const transits: string[] = [];
+  const linesUsed: string[] = [];
+  for (let i = 0; i < segmentLines.length; i++) {
+    const ln = segmentLines[i];
+    if (linesUsed[linesUsed.length - 1] !== ln) {
+      linesUsed.push(ln);
+      if (i > 0) {
+        transits.push(pathStations[i]);
+      }
+    }
+  }
+
+  const stationCount = Math.max(0, pathStations.length - 1);
+  // Average KRL speed ~38 km/h + 1 min dwell per station + 6 min per transit
+  const railDurationMinutes = Math.round(
+    (totalRailKm / 38) * 60 + stationCount * 1.1 + transits.length * 6
+  );
+
+  const pathCoordinates: [number, number][] = pathStations
+    .map((name) => stationMap.get(name))
+    .filter((s): s is Station => Boolean(s))
+    .map((s) => [s.lat, s.lon]);
+
+  return {
+    fromStation: fromStationName,
+    toStation: toStationName,
+    railDistanceKm: Number(totalRailKm.toFixed(1)),
+    railDurationMinutes,
+    fareOneWay: calculateKrlFare(totalRailKm),
+    transits,
+    linesUsed,
+    stationCount,
+    pathCoordinates,
+  };
+}
+
+export type FirstMileMode = "motor" | "ojol" | "angkot";
+
+export interface FirstMileEstimate {
+  mode: FirstMileMode;
+  label: string;
+  dailyRoundTripCost: number;
+  oneWayDurationMinutes: number;
+  note: string;
+}
+
+/**
+ * Estimates daily round-trip first-mile cost from property to nearest KRL station
+ * using actual road distance (km) and driving duration.
+ */
+export function calculateFirstMileCost(
+  roadDistanceKm: number,
+  roadDurationMinutes?: number
+): Record<FirstMileMode, FirstMileEstimate> {
+  const d = Math.max(0.5, roadDistanceKm);
+  const baseDriveMin =
+    roadDurationMinutes ?? Math.max(3, Math.round((d / 28) * 60));
+
+  // 1. Motor Pribadi: BBM ~Rp 350/km x 2 (PP) + Parkir Inap Stasiun Rp 6.000/hari
+  const motorFuelPP = Math.round((d * 2 * 350) / 500) * 500;
+  const motorParking = 6000;
+  const motorDaily = motorFuelPP + motorParking;
+
+  // 2. Ojek Online (GoRide/GrabBike): Rp 11.000 untuk 4 km pertama + Rp 2.500/km selanjutnya (sekali jalan)
+  const ojolOneWay =
+    d <= 4 ? 11000 : 11000 + Math.ceil(d - 4) * 2500;
+  const ojolDaily = ojolOneWay * 2;
+
+  // 3. Angkot / Mikrotrans / Feeder: Rp 5.000 untuk <=5 km, Rp 7.000 untuk >5 km (sekali jalan)
+  const angkotOneWay = d <= 5 ? 5000 : d <= 10 ? 7000 : 10000;
+  const angkotDaily = angkotOneWay * 2;
+
+  return {
+    motor: {
+      mode: "motor",
+      label: "Motor Pribadi + Parkir Stasiun",
+      dailyRoundTripCost: motorDaily,
+      oneWayDurationMinutes: baseDriveMin,
+      note: `BBM PP ~Rp${motorFuelPP.toLocaleString("id-ID")} + Parkir Inap Rp6.000/hr`,
+    },
+    ojol: {
+      mode: "ojol",
+      label: "Ojek Online (PP)",
+      dailyRoundTripCost: ojolDaily,
+      oneWayDurationMinutes: baseDriveMin + 3,
+      note: `~Rp${ojolOneWay.toLocaleString("id-ID")} sekali jalan (${d.toFixed(1)} km)`,
+    },
+    angkot: {
+      mode: "angkot",
+      label: "Angkot / Feeder Umum (PP)",
+      dailyRoundTripCost: angkotDaily,
+      oneWayDurationMinutes: Math.round(baseDriveMin * 1.45) + 5,
+      note: `~Rp${angkotOneWay.toLocaleString("id-ID")} sekali jalan`,
+    },
+  };
+}

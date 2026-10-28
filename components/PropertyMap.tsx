@@ -18,7 +18,11 @@ import { createLayerComponent } from "@react-leaflet/core"
 import type { LayerProps } from "@react-leaflet/core"
 import { dynamicMapLayer } from "esri-leaflet"
 import type { Perumahan } from "@/components/HouseCard"
-import { KRL_STATIONS, type Station } from "@/lib/geoUtils"
+import {
+  KRL_LINES_NETWORK,
+  KRL_STATIONS,
+  type Station,
+} from "@/lib/geoUtils"
 import {
   parsePropertyCoordinate,
   type Coordinate,
@@ -396,7 +400,7 @@ export function PropertyMap({
           <LayersControl.Overlay checked name="Jalur & Stasiun KRL">
             <LayerGroup>
               <Pane name="krl-lines" style={{ zIndex: 430 }}>
-                {KRL_LINES.map((line) => {
+                {KRL_LINES_NETWORK.map((line) => {
                   const points = line.stations.flatMap((name) => {
                     const station = findStation(name)
                     return station
@@ -405,7 +409,7 @@ export function PropertyMap({
                   })
                   return (
                     <Polyline
-                      key={line.name}
+                      key={line.id}
                       positions={points}
                       pathOptions={{
                         color: line.color,
