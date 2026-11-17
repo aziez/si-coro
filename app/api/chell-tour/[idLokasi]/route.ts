@@ -3,7 +3,38 @@ import { NextRequest } from "next/server"
 const CHELL_TOUR_BASE =
   process.env.CHELL_TOUR_URL ||
   process.env.NEXT_PUBLIC_CHELL_TOUR_URL ||
-  "http://localhost:3001"
+  "https://tour.chell-ai.my.id"
+
+/**
+ * Showcase project used when this SiKumbang location has no Chell-Tour
+ * project yet (or Chell-Tour is unreachable). Arunika Grove is a published
+ * demo on Chell-Tour with both a live siteplan and a 360° tour, so every tab
+ * in the detail page has real content. Slugs must exist on CHELL_TOUR_BASE.
+ */
+function demoProject() {
+  return {
+    id: "demo-arunika",
+    slug: "arunika-grove-residence",
+    name: "Arunika Grove Residence (Contoh Demo)",
+    description:
+      "Contoh proyek Chell-Tour: siteplan kavling live dan tur virtual 360°.",
+    hubUrl: "/p/arunika-grove-residence",
+    primarySiteplan: {
+      id: "demo-siteplan",
+      slug: "arunika-grove-residence-siteplan",
+      name: "Siteplan Kavling Arunika",
+      embedUrl: "/siteplan/arunika-grove-residence-siteplan?embed=1",
+      fullUrl: "/siteplan/arunika-grove-residence-siteplan",
+    },
+    primaryTour: {
+      id: "demo-tour",
+      slug: "arunika-grove-residence-5836",
+      name: "Tur Virtual 360° Rumah Contoh",
+      url: "/tour/arunika-grove-residence-5836",
+    },
+    unitTypes: [],
+  }
+}
 
 export async function GET(
   _request: NextRequest,
@@ -25,53 +56,22 @@ export async function GET(
 
     if (res.ok) {
       const data = await res.json()
-      return Response.json({
-        ...data,
-        chellTourBaseUrl: CHELL_TOUR_BASE,
-      })
+      // A real project linked to this SiKumbang ID: show it as-is.
+      if (data?.success && data.project && !data.isDemoFallback) {
+        return Response.json({ ...data, chellTourBaseUrl: CHELL_TOUR_BASE })
+      }
     }
   } catch {
-    // Chell-Tour service might not be running on localhost:3001 yet;
-    // Provide an intelligent fallback structure for smooth judge demos
+    // Chell-Tour unreachable: fall through to the showcase demo.
   } finally {
     clearTimeout(timeout)
   }
 
-  // Graceful fallback response for judge presentation
   return Response.json({
     success: true,
     isDemoFallback: true,
     chellTourBaseUrl: CHELL_TOUR_BASE,
     requestedSikumbangId: idLokasi,
-    project: {
-      id: "demo-project",
-      slug: "grand-harmoni-residence",
-      name: "Grand Harmoni Residence (Demo Chell-Tour)",
-      description:
-        "Proyek perumahan terintegrasi dengan Siteplan Digital & Tur Virtual 360°",
-      hubUrl: "/p/grand-harmoni-residence",
-      primarySiteplan: {
-        id: "demo-siteplan",
-        slug: "masterplan-tahap-1",
-        name: "Siteplan Realtime Tahap 1",
-        embedUrl: "/siteplan/masterplan-tahap-1?embed=1",
-        fullUrl: "/siteplan/masterplan-tahap-1",
-      },
-      primaryTour: {
-        id: "demo-tour",
-        slug: "rumah-contoh-tipe-36",
-        name: "Tur Virtual 360° Rumah Contoh",
-        url: "/tour/rumah-contoh-tipe-36",
-      },
-      unitTypes: [
-        {
-          id: "unit-1",
-          name: "Tipe 36/72",
-          price: 185000000,
-          landArea: 72,
-          buildingArea: 36,
-        },
-      ],
-    },
+    project: demoProject(),
   })
 }

@@ -231,8 +231,8 @@ export default function KprCalculator({
                 )}
               >
                 {isSubsidi
-                  ? "Skema KPR FLPP Subsidi BTN"
-                  : "Skema KPR Komersial BTN"}
+                  ? "Skema KPR Subsidi FLPP"
+                  : "Skema KPR Komersial"}
               </Badge>
             </div>
 

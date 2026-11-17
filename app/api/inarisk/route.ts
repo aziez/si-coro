@@ -165,7 +165,9 @@ export async function GET(request: NextRequest) {
     const [elevationProfile, ...pixelValues] = await Promise.all([
       fetchElevationProfile(samplePoints, controller.signal),
       ...samplePoints.map((pt) =>
-        identifyInaRiskPoint(pt.lat, pt.lon, controller.signal).catch(() => null)
+        identifyInaRiskPoint(pt.lat, pt.lon, controller.signal).catch(
+          () => null
+        )
       ),
     ])
 
@@ -174,7 +176,29 @@ export async function GET(request: NextRequest) {
       throw new Error("InaRISK & DEM unavailable")
     }
 
-    const centerPixel = pixelValues[0] ?? 0
+    // Only elevation came back: flood hazard is unknown, not "safe".
+    if (validPixels.length === 0) {
+      return Response.json(
+        {
+          success: true,
+          riskLevel: "Tidak diketahui",
+          centerRiskLevel: null,
+          pixelValue: null,
+          centerPixelValue: null,
+          maxSurroundingPixelValue: null,
+          affectedSurroundingCount: null,
+          sampleCount: 0,
+          bufferWarning: null,
+          isFloodFree: null,
+          elevation: elevationProfile,
+        },
+        { headers: { "Cache-Control": "private, max-age=300" } }
+      )
+    }
+
+    // A failed center lookup must not read as 0 (= safe); fall back to the
+    // worst sampled point instead.
+    const centerPixel = pixelValues[0] ?? Math.max(...validPixels)
     const surroundingPixels = pixelValues
       .slice(1)
       .filter((v): v is number => v !== null)

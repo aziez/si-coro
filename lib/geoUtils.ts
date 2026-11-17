@@ -149,6 +149,18 @@ export function getNearestStation(lat: number, lon: number): { station: Station;
 }
 
 /**
+ * KRL Commuter Line only serves Jabodetabek (+ Rangkasbitung/Cikarang ends).
+ * Beyond this straight-line distance from the nearest station, a "nearest KRL
+ * station" is meaningless (e.g. Jombang → Cikarang 584 km), so transit access
+ * is treated as not applicable instead of being shown or scored.
+ */
+export const KRL_SERVICE_RADIUS_KM = 25;
+
+export function isWithinKrlService(straightDistanceKm: number): boolean {
+  return straightDistanceKm <= KRL_SERVICE_RADIUS_KM;
+}
+
+/**
  * Gets distance to Jakarta Center
  */
 export function getDistanceToJakarta(lat: number, lon: number): number {

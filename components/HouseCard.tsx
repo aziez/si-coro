@@ -2,7 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import { MapPin, Heart, Users, Buildings, Train, Scales } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
-import { getDistanceToJakarta, getNearestStation } from '@/lib/geoUtils';
+import { getDistanceToJakarta, getNearestStation, isWithinKrlService } from '@/lib/geoUtils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -96,8 +96,12 @@ export function HouseCard({
     const lat = parseFloat(latStr?.trim());
     const lon = parseFloat(lonStr?.trim());
     if (!isNaN(lat) && !isNaN(lon)) {
-      distanceToJakarta = getDistanceToJakarta(lat, lon);
-      nearestStation = getNearestStation(lat, lon);
+      const nearest = getNearestStation(lat, lon);
+      // Commute geo chips only mean something inside the Jabodetabek KRL area
+      if (isWithinKrlService(nearest.distance)) {
+        nearestStation = nearest;
+        distanceToJakarta = getDistanceToJakarta(lat, lon);
+      }
     }
   }
 

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getDistanceToJakarta, getNearestStation } from "@/lib/geoUtils";
+import { getDistanceToJakarta, getNearestStation, isWithinKrlService } from "@/lib/geoUtils";
 import { cn } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -105,11 +105,14 @@ export default function ComparePage() {
         if (lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon)) {
           distanceToJakarta = getDistanceToJakarta(lat, lon);
           const s = getNearestStation(lat, lon);
-          nearestStation = `${s.station.name} (${s.distance.toFixed(1)} km)`;
+          nearestStation = isWithinKrlService(s.distance)
+            ? `${s.station.name} (${s.distance.toFixed(1)} km)`
+            : "Di luar jangkauan KRL";
           try {
             const fd = await fetch(`/api/inarisk?lat=${lat}&lon=${lon}`);
             const fj = await fd.json();
-            if (fj.success) { floodRisk = fj.riskLevel; floodSafe = fj.isFloodFree; }
+            // isFloodFree === null means InaRISK gave no hazard data: leave as "tidak tersedia"
+            if (fj.success && fj.isFloodFree !== null) { floodRisk = fj.riskLevel; floodSafe = fj.isFloodFree; }
           } catch { /* silently fail */ }
         }
 

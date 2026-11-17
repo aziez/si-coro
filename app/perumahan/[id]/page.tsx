@@ -21,6 +21,7 @@ import {
   calculateKrlRoute,
   getDistanceToJakarta,
   getNearestStation,
+  isWithinKrlService,
 } from "@/lib/geoUtils";
 import type { StationRouteCandidate } from "@/app/api/route-krl/route";
 import {
@@ -142,6 +143,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
     bestStation: StationRouteCandidate | null;
     alternatives: StationRouteCandidate[];
   }>({ bestStation: null, alternatives: [] });
+  const [krlApplicable, setKrlApplicable] = useState(true);
   const [workStation, setWorkStation] = useState("Stasiun Sudirman");
   const [showcaseTab, setShowcaseTab] = useState<string>("live-siteplan");
   const [chellData, setChellData] = useState<{
@@ -220,35 +222,42 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
             nearestStation: nearestFallback,
           });
 
-          // Provide immediate fallback before OSRM resolves
-          const immediateCandidate: StationRouteCandidate = {
-            station: nearestFallback.station,
-            straightDistanceKm: Number(nearestFallback.distance.toFixed(2)),
-            roadDistanceKm: Number((nearestFallback.distance * 1.32).toFixed(2)),
-            roadDurationMinutes: Math.max(3, Math.round(((nearestFallback.distance * 1.32) / 26) * 60)),
-            routeCoordinates: [
-              [lat, lon],
-              [nearestFallback.station.lat, nearestFallback.station.lon],
-            ],
-            source: "estimated",
-          };
-          setStationRoutes({
-            bestStation: immediateCandidate,
-            alternatives: [immediateCandidate],
-          });
+          // Outside KRL Commuter Line coverage, "nearest station" (and the
+          // commute cost built on it) would be meaningless, so skip routing.
+          const krlApplicable = isWithinKrlService(nearestFallback.distance);
+          setKrlApplicable(krlApplicable);
 
-          // 1. Fetch actual OSRM road route to top 3 nearest KRL stations
-          fetch(`/api/route-krl?lat=${lat}&lon=${lon}`)
-            .then(r => r.json())
-            .then(d => {
-              if (d.success && d.bestStation) {
-                setStationRoutes({
-                  bestStation: d.bestStation,
-                  alternatives: d.alternatives ?? [d.bestStation],
-                });
-              }
-            })
-            .catch(console.error);
+          if (krlApplicable) {
+            // Provide immediate fallback before OSRM resolves
+            const immediateCandidate: StationRouteCandidate = {
+              station: nearestFallback.station,
+              straightDistanceKm: Number(nearestFallback.distance.toFixed(2)),
+              roadDistanceKm: Number((nearestFallback.distance * 1.32).toFixed(2)),
+              roadDurationMinutes: Math.max(3, Math.round(((nearestFallback.distance * 1.32) / 26) * 60)),
+              routeCoordinates: [
+                [lat, lon],
+                [nearestFallback.station.lat, nearestFallback.station.lon],
+              ],
+              source: "estimated",
+            };
+            setStationRoutes({
+              bestStation: immediateCandidate,
+              alternatives: [immediateCandidate],
+            });
+
+            // 1. Fetch actual OSRM road route to top 3 nearest KRL stations
+            fetch(`/api/route-krl?lat=${lat}&lon=${lon}`)
+              .then(r => r.json())
+              .then(d => {
+                if (d.success && d.bestStation) {
+                  setStationRoutes({
+                    bestStation: d.bestStation,
+                    alternatives: d.alternatives ?? [d.bestStation],
+                  });
+                }
+              })
+              .catch(console.error);
+          }
 
           // 2. Fetch 5-point InaRISK flood buffer + Open-Meteo DEM elevation
           fetch(`/api/inarisk?lat=${lat}&lon=${lon}`)
@@ -461,6 +470,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                 distanceToJakartaKm={geoData?.distanceToJakarta}
                 bestStationRoute={stationRoutes.bestStation}
                 alternatives={stationRoutes.alternatives}
+                krlApplicable={krlApplicable}
                 floodData={floodData}
                 sampleSpec={uniqueTipe[0] ?? null}
               />
@@ -542,7 +552,7 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                     className="border-primary/30 bg-primary/10 text-xs font-semibold text-primary"
                   >
                     {chellData.isDemoFallback
-                      ? "Demo Chell-Tour Terintegrasi"
+                      ? "Contoh Demo Chell-Tour"
                       : "Live Chell-Tour"}
                   </Badge>
                 )}
@@ -551,6 +561,13 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                 Pilih kavling langsung di Siteplan Interaktif 3D, jelajahi rumah
                 contoh 360°, atau cek rute jalan raya OSRM ke stasiun KRL.
               </p>
+              {chellData?.isDemoFallback && (
+                <p className="text-xs text-muted-foreground">
+                  Developer perumahan ini belum memakai Chell-Tour. Siteplan dan
+                  tur di bawah adalah contoh proyek lain untuk menunjukkan
+                  fiturnya.
+                </p>
+              )}
             </div>
             {chellData?.project?.primarySiteplan && (
               <a
@@ -617,9 +634,9 @@ export default function DetailPerumahanPage({ params }: { params: Promise<{ id: 
                 <div className="relative h-[480px] overflow-hidden rounded-2xl border border-border/50 bg-slate-900 shadow-md md:h-[580px]">
                   <iframe
                     src={`${chellData.chellTourBaseUrl}${chellData.project.primarySiteplan.embedUrl}`}
+                    title={chellData.project.primarySiteplan.name}
                     className="h-full w-full border-0"
                     allow="accelerometer; gyroscope; magnetometer"
-                    loading="lazy"
                   />
                 </div>
               </TabsContent>
