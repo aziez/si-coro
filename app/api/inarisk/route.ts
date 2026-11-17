@@ -54,9 +54,11 @@ async function identifyInaRiskPoint(
     f: "json",
   })
 
+  // Hazard maps change rarely and gis.bnpb.go.id has outages (Cloudflare 521);
+  // keep successful lookups for 30 days so known locations survive downtime.
   const response = await fetch(`${FLOOD_HAZARD_IDENTIFY}?${params}`, {
     signal,
-    next: { revalidate: 86_400 },
+    next: { revalidate: 2_592_000 },
   })
   if (!response.ok) throw new Error(`InaRISK returned ${response.status}`)
 
