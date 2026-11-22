@@ -1,100 +1,144 @@
-'use client';
+"use client"
 
-import React from 'react';
-import Link from 'next/link';
-import { Scales, X } from '@phosphor-icons/react';
-import { Perumahan } from './HouseCard';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
+import React from "react"
+import Link from "next/link"
+import { Scales, X, ArrowRight } from "@phosphor-icons/react"
+import { Perumahan } from "./HouseCard"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface CompareFloatingBarProps {
-  compareList: Perumahan[];
-  onRemove: (house: Perumahan) => void;
-  onClear: () => void;
+  compareList: Perumahan[]
+  onRemove: (house: Perumahan) => void
+  onClear: () => void
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function CompareFloatingBar({ compareList, onRemove, onClear }: CompareFloatingBarProps) {
-  if (compareList.length === 0) return null;
+export function CompareFloatingBar({
+  compareList,
+  onRemove,
+  onClear,
+}: CompareFloatingBarProps) {
+  if (compareList.length === 0) return null
 
   const resolveImg = (url: string) =>
-    url.startsWith('http') ? url : `https://sikumbang.tapera.go.id${url.startsWith('/') ? '' : '/'}${url}`;
+    url.startsWith("http")
+      ? url
+      : `https://sikumbang.tapera.go.id${url.startsWith("/") ? "" : "/"}${url}`
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-3 pointer-events-none flex justify-center animate-in slide-in-from-bottom-6 fade-in duration-300">
-      <div className="glass-card border border-border/60 shadow-2xl rounded-2xl px-4 py-3 w-full max-w-3xl flex flex-col sm:flex-row items-center justify-between gap-3 pointer-events-auto">
+    <div className="pb-safe pointer-events-none fixed right-0 bottom-0 left-0 z-40 flex justify-center p-3 animate-in slide-in-from-bottom-6 fade-in duration-300">
+      <div className="glass-card pointer-events-auto flex w-full max-w-3xl flex-col items-center justify-between gap-3 rounded-2xl border border-primary/30 px-4 py-3 shadow-2xl sm:flex-row">
         {/* Left: Icon + label */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="bg-primary/10 p-2 rounded-full hidden sm:flex">
-            <Scales weight="duotone" className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="font-bold text-sm">Bandingkan Properti</h4>
-              <Badge variant="secondary" className="text-xs px-1.5 h-5">{compareList.length}/3</Badge>
+        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-start">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+              <Scales weight="duotone" className="h-5 w-5" />
             </div>
-            <button onClick={onClear} className="text-xs text-destructive hover:underline mt-0.5 cursor-pointer">
-              Hapus Semua
-            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-extrabold sm:text-sm">
+                  Bandingkan Rumah
+                </h4>
+                <Badge
+                  variant="secondary"
+                  className="h-5 bg-primary/15 px-1.5 text-[11px] font-bold text-primary"
+                >
+                  {compareList.length}/3
+                </Badge>
+              </div>
+              <button
+                type="button"
+                onClick={onClear}
+                className="mt-0.5 text-[11px] font-semibold text-destructive hover:underline"
+              >
+                Reset Pilihan
+              </button>
+            </div>
           </div>
+
+          {/* Mobile CTA inline */}
+          <Link href="/compare" className="sm:hidden">
+            <Button
+              size="sm"
+              disabled={compareList.length < 2}
+              className="h-9 gap-1 rounded-xl px-3.5 text-xs font-bold"
+            >
+              {compareList.length < 2
+                ? `+${2 - compareList.length} Lagi`
+                : "Bandingkan"}
+              <ArrowRight weight="bold" className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
         </div>
 
-        <Separator orientation="vertical" className="h-10 hidden sm:block" />
+        <Separator orientation="vertical" className="hidden h-10 sm:block" />
 
-        {/* Center: Thumbnails */}
-        <div className="flex items-center gap-2 flex-1 justify-center">
-          {compareList.map(house => (
+        {/* Center: Thumbnails with always-visible remove badge for mobile touch */}
+        <div className="flex w-full flex-1 items-center justify-start gap-2.5 overflow-x-auto py-0.5 sm:justify-center">
+          {compareList.map((house) => (
             <div
               key={house.idLokasi}
-              className="relative group rounded-lg overflow-hidden border border-border w-14 h-14 shrink-0"
+              className="relative flex h-12 flex-1 items-center gap-2 rounded-xl border border-border/80 bg-background/90 p-1.5 pr-7 shadow-2xs sm:max-w-44"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={house.foto?.[0] ? resolveImg(house.foto[0]) : ''}
+                src={house.foto?.[0] ? resolveImg(house.foto[0]) : ""}
                 alt={house.namaPerumahan}
-                className="w-full h-full object-cover"
-                onError={e => {
-                  (e.target as HTMLImageElement).src =
-                    'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiNlZWVlZWUiLz48L3N2Zz4=';
+                className="h-9 w-9 shrink-0 rounded-lg bg-muted object-cover"
+                onError={(e) => {
+                  ;(e.target as HTMLImageElement).src =
+                    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiNlZWVlZWUiLz48L3N2Zz4="
                 }}
               />
+              <span className="line-clamp-2 text-[11px] font-bold leading-tight text-foreground">
+                {house.namaPerumahan}
+              </span>
               <button
+                type="button"
                 onClick={() => onRemove(house)}
-                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                aria-label={`Hapus ${house.namaPerumahan} dari perbandingan`}
+                className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-destructive hover:text-white"
                 title="Hapus"
               >
-                <X weight="bold" className="w-4 h-4 text-white" />
+                <X weight="bold" className="h-3 w-3" />
               </button>
             </div>
           ))}
+
           {/* Empty slots */}
           {Array.from({ length: 3 - compareList.length }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="w-14 h-14 rounded-lg border-2 border-dashed border-border/60 flex items-center justify-center text-muted-foreground/40 shrink-0"
+              className="flex h-12 min-w-24 flex-1 items-center justify-center rounded-xl border-2 border-dashed border-border/60 px-2 text-center text-[11px] font-medium text-muted-foreground/60 sm:max-w-36"
             >
-              <span className="text-lg font-light">+</span>
+              + Pilih Rumah
             </div>
           ))}
         </div>
 
-        {/* Right: CTA */}
-        <Link href="/compare" className="w-full sm:w-auto shrink-0">
+        {/* Right: Desktop CTA */}
+        <Link href="/compare" className="hidden shrink-0 sm:block">
           <Button
             disabled={compareList.length < 2}
-            className={cn('w-full sm:w-auto px-5 text-sm font-semibold h-9',
-              compareList.length >= 2 && 'shadow-sm shadow-primary/25 hover:-translate-y-0.5 transition-all'
+            className={cn(
+              "h-10 gap-1.5 rounded-xl px-5 text-xs font-bold sm:text-sm",
+              compareList.length >= 2 &&
+                "shadow-md shadow-primary/25 transition-all hover:-translate-y-0.5"
             )}
           >
-            {compareList.length < 2 ? `Pilih ${2 - compareList.length} lagi` : 'Bandingkan Sekarang'}
+            {compareList.length < 2
+              ? `Pilih ${2 - compareList.length} Lagi`
+              : "Bandingkan Sekarang"}
+            <ArrowRight weight="bold" className="h-4 w-4" />
           </Button>
         </Link>
       </div>
     </div>
-  );
+  )
 }

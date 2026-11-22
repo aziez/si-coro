@@ -18,6 +18,15 @@ import {
   MapPin,
   List,
   MapTrifold,
+  Drop,
+  Train,
+  Calculator,
+  Compass,
+  SealCheck,
+  ArrowCounterClockwise,
+  CheckCircle,
+  CaretUp,
+  CaretDown,
 } from "@phosphor-icons/react"
 import type { Wilayah, Asosiasi } from "@/components/SearchPanel"
 import { getDistanceToJakarta } from "@/lib/geoUtils"
@@ -29,14 +38,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const QUICK_FILTERS = [
-  { name: "Bogor", code: "3201", prov: "32" },
-  { name: "Depok", code: "3276", prov: "32" },
-  { name: "Tangerang", code: "3603", prov: "36" },
-  { name: "Bekasi", code: "3216", prov: "32" },
+  { name: "Kab. Bogor", code: "3201", prov: "32" },
+  { name: "Kab. Bekasi", code: "3216", prov: "32" },
+  { name: "Kab. Tangerang", code: "3603", prov: "36" },
+  { name: "Kota Depok", code: "3276", prov: "32" },
+  { name: "Kota Bogor", code: "3271", prov: "32" },
+  { name: "Tangsel", code: "3674", prov: "36" },
+]
+
+const VALUE_PILLARS = [
+  {
+    icon: Drop,
+    title: "Audit Banjir & Elevasi",
+    desc: "5-titik radius 250m InaRISK BNPB + kontur DEM 90m",
+    color: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10",
+  },
+  {
+    icon: Train,
+    title: "Rute Jalan Raya KRL",
+    desc: "Jarak & waktu aktual OSRM ke 3 stasiun KRL terdekat",
+    color: "text-orange-600 dark:text-orange-400 bg-orange-500/10",
+  },
+  {
+    icon: Calculator,
+    title: "True Affordability KPR BTN",
+    desc: "Simulasi cicilan FLPP + ongkos komuter harian riil",
+    color: "text-blue-600 dark:text-blue-400 bg-blue-500/10",
+  },
+  {
+    icon: Compass,
+    title: "Siteplan Live & Tur 360°",
+    desc: "Cek kavling tersedia & interior rumah contoh ChellTour",
+    color: "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10",
+  },
 ]
 
 const API_BASE = "https://sikumbang.tapera.go.id"
@@ -47,7 +86,7 @@ const PropertyMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-[min(68dvh,680px)] min-h-[430px] animate-pulse rounded-2xl border bg-muted" />
+      <div className="h-[min(66dvh,640px)] min-h-[420px] animate-pulse rounded-2xl border bg-muted" />
     ),
   }
 )
@@ -69,9 +108,9 @@ export default function Page() {
   const [selectedKecamatan, setSelectedKecamatan] = useState("")
   const [selectedAsosiasi, setSelectedAsosiasi] = useState("")
   const [activeKodeWilayah, setActiveKodeWilayah] = useState("")
-  const [localSort, setLocalSort] = useState<"default" | "closest-jakarta">(
-    "default"
-  )
+  const [localSort, setLocalSort] = useState<
+    "default" | "closest-jakarta" | "price-asc"
+  >("default")
   const [isSubsidi, setIsSubsidi] = useState(false)
   const [searchTrigger, setSearchTrigger] = useState(0)
 
@@ -89,15 +128,42 @@ export default function Page() {
   const [isRestored, setIsRestored] = useState(false)
   const [viewMode, setViewMode] = useState<"list" | "map">("list")
   const [mapListLimit, setMapListLimit] = useState(60)
+  const [heroCollapsed, setHeroCollapsed] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  const triggerToast = useCallback((msg: string) => {
+    setToastMessage(msg)
+  }, [])
+
+  useEffect(() => {
+    if (!toastMessage) return
+    const timer = setTimeout(() => setToastMessage(null), 3200)
+    return () => clearTimeout(timer)
+  }, [toastMessage])
+
   // ── Hooks ──
   const { favorites, toggleFavorite, isFavorite, addMultipleFavorites } =
     useFavorites()
-  const { compareList, toggleCompare, isCompared, clearCompare } = useCompare()
+  const { compareList, toggleCompare, isCompared, clearCompare } =
+    useCompare(triggerToast)
   const { area: mapArea, searchAt: handleMapViewportChange } = useMapAreaSearch(
     {
       keyword: searchQuery,
       asosiasi: selectedAsosiasi,
     }
+  )
+
+  const handleToggleFavoriteWithToast = useCallback(
+    (house: Perumahan) => {
+      const currentlyFav = isFavorite(house.idLokasi)
+      toggleFavorite(house)
+      triggerToast(
+        currentlyFav
+          ? `${house.namaPerumahan} dihapus dari Favorit.`
+          : `${house.namaPerumahan} disimpan ke Favorit.`
+      )
+    },
+    [isFavorite, toggleFavorite, triggerToast]
   )
 
   // ── Refs ──
@@ -112,7 +178,6 @@ export default function Page() {
     const sharedIds = params.get("shared")
 
     if (sharedIds) {
-      // Restoring an external URL snapshot intentionally initializes several states together.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSharedFavoritesMode(true)
       const ids = sharedIds.split(",").filter(Boolean)
@@ -258,7 +323,6 @@ export default function Page() {
   // ─── Fetch kabupatens when provinsi changes ────────────────────────────────
 
   useEffect(() => {
-    // A province change invalidates the dependent administrative selection.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedKabupaten("")
     if (!selectedProvinsi) {
@@ -274,7 +338,6 @@ export default function Page() {
   // ─── Fetch kecamatans when kabupaten changes ───────────────────────────────
 
   useEffect(() => {
-    // A city change invalidates the dependent administrative selection.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedKecamatan("")
     if (!selectedKabupaten) {
@@ -369,11 +432,31 @@ export default function Page() {
     [keyword, selectedKecamatan, selectedKabupaten, selectedProvinsi]
   )
 
+  const handleResetFilters = useCallback(() => {
+    setKeyword("")
+    setSearchQuery("")
+    setSelectedProvinsi("")
+    setSelectedKabupaten("")
+    setSelectedKecamatan("")
+    setSelectedAsosiasi("")
+    setActiveKodeWilayah("")
+    setIsSubsidi(false)
+    setLocalSort("default")
+    setData([])
+    setPage(1)
+    lastFetchedPage.current = 0
+    setSearchTrigger((t) => t + 1)
+    triggerToast("Semua filter pencarian telah direset.")
+  }, [triggerToast])
+
   const handleQuickFilter = useCallback(
     (qf: (typeof QUICK_FILTERS)[0]) => {
-      const prov = provinces.find((p) => p.kodeWilayah === qf.prov)
-      if (!prov) return
-      setSelectedProvinsi(prov.kodeWilayah)
+      // Clicking the active quick filter again resets it
+      if (activeKodeWilayah === qf.code) {
+        handleResetFilters()
+        return
+      }
+      setSelectedProvinsi(qf.prov)
       setSelectedKecamatan("")
       fetch(`${API_BASE}/ajax/wilayah/get-kabupaten/${qf.prov}`)
         .then((r) => r.json())
@@ -388,7 +471,7 @@ export default function Page() {
           setSearchTrigger((t) => t + 1)
         })
     },
-    [provinces]
+    [activeKodeWilayah, handleResetFilters]
   )
 
   // ─── Derived state ─────────────────────────────────────────────────────────
@@ -421,7 +504,18 @@ export default function Page() {
       }
       return distA - distB
     })
+  } else if (localSort === "price-asc") {
+    finalData.sort((a, b) => {
+      const priceA = a.tipeRumah?.length
+        ? Math.min(...a.tipeRumah.map((t) => t.harga))
+        : Infinity
+      const priceB = b.tipeRumah?.length
+        ? Math.min(...b.tipeRumah.map((t) => t.harga))
+        : Infinity
+      return priceA - priceB
+    })
   }
+
   const mapDataSource = mapArea.region ? mapArea.properties : finalData
   const mapData = isSubsidi
     ? mapDataSource.filter(
@@ -437,24 +531,26 @@ export default function Page() {
       : ""
 
   // Build active search label for header pill
-  const activeSearchLabel = [
+  const activeSearchParts = [
     searchQuery,
-    provinces.find((p) => p.kodeWilayah === selectedProvinsi)?.namaWilayah,
-    kabupatens.find((k) => k.kodeWilayah === selectedKabupaten)?.namaWilayah,
-    kecamatans.find((k) => k.kodeWilayah === selectedKecamatan)?.namaWilayah,
+    kecamatans.find((k) => k.kodeWilayah === selectedKecamatan)?.namaWilayah ||
+      kabupatens.find((k) => k.kodeWilayah === selectedKabupaten)
+        ?.namaWilayah ||
+      QUICK_FILTERS.find((q) => q.code === activeKodeWilayah)?.name ||
+      provinces.find((p) => p.kodeWilayah === selectedProvinsi)?.namaWilayah,
     asosiasiList.find((a) => String(a.id) === selectedAsosiasi)?.singkatan,
     isSubsidi ? "Subsidi" : "",
-  ]
-    .filter(Boolean)
-    .join(" · ")
+  ].filter(Boolean)
+
+  const activeSearchLabel = activeSearchParts.join(" · ")
+  const activeFilterCount = activeSearchParts.length
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground pb-24">
       {/* Floating Header — always visible */}
       <FloatingHeader
-        // Search panel props
         provinces={provinces}
         kabupatens={kabupatens}
         kecamatans={kecamatans}
@@ -472,150 +568,286 @@ export default function Page() {
         onKeywordChange={setKeyword}
         onSubsidiChange={setIsSubsidi}
         onSearch={handleSearch}
-        // Header-specific props
         favoritesCount={favorites.length}
+        compareCount={compareList.length}
         showFavoritesOnly={showFavoritesOnly}
         onToggleFavorites={() => setShowFavoritesOnly((v) => !v)}
         activeSearchLabel={activeSearchLabel}
+        activeFilterCount={activeFilterCount}
+        onResetFilters={handleResetFilters}
       />
 
-      {/* Spacer for fixed header */}
-      <div className="h-14" />
+      {/* Spacer for fixed 64px header */}
+      <div className="h-16" />
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+        {/* ── Hero Value Proposition Banner ("Cek Isi Rumah, Bukan Kulitnya") ── */}
+        {!sharedFavoritesMode && !showFavoritesOnly && (
+          <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-emerald-500/10 via-card to-blue-500/5 p-4 shadow-xs sm:p-5">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="bg-primary text-[10px] font-extrabold uppercase tracking-wider text-primary-foreground">
+                    Cek Isi Rumah, Bukan Kulitnya
+                  </Badge>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    35.483+ Perumahan SiKumbang Terindeks
+                  </span>
+                </div>
+                <h1 className="text-lg font-black tracking-tight text-foreground sm:text-2xl">
+                  Transparansi Rumah Subsidi &amp; Komersil Sebelum Akad KPR
+                </h1>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setHeroCollapsed((v) => !v)}
+                className="inline-flex items-center gap-1 self-start rounded-full border border-border/80 bg-background/80 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-background hover:text-foreground sm:self-auto"
+              >
+                {heroCollapsed ? (
+                  <>
+                    Lihat Fitur <CaretDown weight="bold" className="h-3 w-3" />
+                  </>
+                ) : (
+                  <>
+                    Ringkas <CaretUp weight="bold" className="h-3 w-3" />
+                  </>
+                )}
+              </button>
+            </div>
+
+            {!heroCollapsed && (
+              <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                {VALUE_PILLARS.map((pillar) => {
+                  const Icon = pillar.icon
+                  return (
+                    <div
+                      key={pillar.title}
+                      className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/85 p-3 backdrop-blur-xs"
+                    >
+                      <div
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                          pillar.color
+                        )}
+                      >
+                        <Icon weight="duotone" className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-extrabold text-foreground">
+                          {pillar.title}
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                          {pillar.desc}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Shared favorites banner */}
         {sharedFavoritesMode && (
-          <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/20 bg-primary/8 p-5 sm:flex-row sm:items-center">
+          <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/8 p-5 sm:flex-row sm:items-center">
             <div>
-              <h2 className="flex items-center gap-2 text-lg font-bold text-primary">
+              <h2 className="flex items-center gap-2 text-lg font-extrabold text-primary">
                 <Heart weight="fill" className="h-5 w-5 text-red-500" />
-                Daftar Rekomendasi Favorit
+                Daftar Rekomendasi Rumah Pilihan
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Seseorang telah membagikan daftar perumahan pilihan ini kepada
                 Anda.
               </p>
             </div>
-            <Button
-              onClick={() => {
-                addMultipleFavorites(sharedData)
-                alert(
-                  "Berhasil! Semua perumahan telah ditambahkan ke Favorit Anda."
-                )
-              }}
-              className="shrink-0"
-            >
-              Tambahkan ke Favorit Saya
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSharedFavoritesMode(false)
+                  window.history.replaceState({}, "", "/")
+                }}
+              >
+                Jelajahi Semua
+              </Button>
+              <Button
+                onClick={() => {
+                  addMultipleFavorites(sharedData)
+                  triggerToast(
+                    "Berhasil! Semua perumahan ditambahkan ke Favorit Anda."
+                  )
+                }}
+                className="shrink-0 font-bold"
+              >
+                Simpan ke Favorit Saya
+              </Button>
+            </div>
           </div>
         )}
 
-        {/* Quick Filters + Actions bar */}
+        {/* ── One-Tap Quick Filter Strip (Horizontal Scroll on Mobile) ── */}
         {!sharedFavoritesMode && (
-          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-muted-foreground">
-                Pintasan:
-              </span>
-              {QUICK_FILTERS.map((qf) => (
+          <div className="flex items-center justify-between gap-3">
+            <div className="no-scrollbar -mx-4 flex flex-1 items-center gap-2 overflow-x-auto px-4 py-1 sm:mx-0 sm:px-0">
+              {/* Instant 1-Tap Subsidi Filter Chip */}
+              <button
+                type="button"
+                onClick={() => setIsSubsidi((v) => !v)}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-bold transition-all active:scale-95",
+                  isSubsidi
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-sm shadow-emerald-600/25"
+                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 hover:bg-emerald-500/20 dark:text-emerald-300"
+                )}
+              >
+                <SealCheck weight="fill" className="h-4 w-4" />
+                Rumah Subsidi
+              </button>
+
+              <div className="h-5 w-px shrink-0 bg-border" />
+
+              {QUICK_FILTERS.map((qf) => {
+                const isActive = activeKodeWilayah === qf.code
+                return (
+                  <button
+                    type="button"
+                    key={qf.code}
+                    onClick={() => handleQuickFilter(qf)}
+                    className={cn(
+                      "inline-flex h-9 shrink-0 items-center gap-1 rounded-full border px-3.5 text-xs font-bold transition-all active:scale-95",
+                      isActive
+                        ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                        : "border-border/80 bg-card text-foreground/80 hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                    )}
+                  >
+                    <MapPin
+                      weight={isActive ? "fill" : "regular"}
+                      className="h-3.5 w-3.5"
+                    />
+                    {qf.name}
+                  </button>
+                )
+              })}
+
+              {(activeKodeWilayah ||
+                searchQuery ||
+                selectedAsosiasi ||
+                isSubsidi) && (
                 <button
-                  key={qf.name}
-                  onClick={() => handleQuickFilter(qf)}
-                  className="rounded-full border border-primary/15 bg-primary/8 px-3 py-1 text-xs font-bold text-primary transition-colors hover:bg-primary/15"
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-3.5 text-xs font-bold text-destructive transition-colors hover:bg-destructive/20"
                 >
-                  {qf.name}
+                  <ArrowCounterClockwise weight="bold" className="h-3.5 w-3.5" />
+                  Reset
                 </button>
-              ))}
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
-              {favorites.length > 0 && (
+            {favorites.length > 0 && (
+              <div className="shrink-0">
                 <ShareButton
                   title="Daftar Rumah Favorit Si-Coro"
-                  text="Lihat daftar perumahan impian yang sudah saya pilih di Si-Coro!"
+                  text="Lihat daftar perumahan impian yang sudah saya cek risiko & biayanya di Si-Coro!"
                   customUrl={sharedUrl}
                 />
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Results section */}
+        {/* ── Results Section ── */}
         <section>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold">
-              {showFavoritesOnly
-                ? "Properti Favorit"
-                : activeKodeWilayah || searchQuery
-                  ? "Hasil Pencarian"
-                  : "Rekomendasi Terbaru"}
-            </h2>
-            <div className="flex items-center gap-2">
+          {/* Mobile-Friendly Results Toolbar */}
+          <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <h2 className="text-lg font-extrabold tracking-tight sm:text-xl">
+                {showFavoritesOnly
+                  ? "Properti Favorit Saya"
+                  : activeSearchLabel
+                    ? `Hasil: ${activeSearchLabel}`
+                    : "Eksplorasi Perumahan Terbaru"}
+              </h2>
               {!loading && !showFavoritesOnly && !sharedFavoritesMode && (
-                <span className="text-sm text-muted-foreground">
-                  {finalData.length} dari {totalData}
+                <span className="text-xs font-semibold text-muted-foreground sm:text-sm">
+                  ({finalData.length} dari{" "}
+                  {totalData.toLocaleString("id-ID")} lokasi)
                 </span>
               )}
-              {isSubsidi && (
-                <Badge
-                  variant="secondary"
-                  className="text-xs text-emerald-600 dark:text-emerald-400"
-                >
-                  Subsidi
-                </Badge>
-              )}
-              {!loading && finalData.length > 0 && (
-                <div className="flex rounded-lg border bg-muted/40 p-0.5">
+            </div>
+
+            {/* View Toggle & Sort Controls */}
+            {!loading && finalData.length > 0 && (
+              <div className="flex items-center justify-between gap-2 sm:justify-end">
+                {/* Daftar / Peta Segmented Control */}
+                <div className="flex rounded-xl border border-border/80 bg-muted/50 p-1">
                   <Button
-                    variant={viewMode === "list" ? "secondary" : "ghost"}
+                    variant={viewMode === "list" ? "default" : "ghost"}
                     size="sm"
-                    className="h-7 gap-1 px-2 text-xs"
+                    className={cn(
+                      "h-8 gap-1.5 rounded-lg px-3 text-xs font-bold",
+                      viewMode === "list" && "shadow-xs"
+                    )}
                     onClick={() => setViewMode("list")}
                   >
-                    <List className="h-3.5 w-3.5" /> Daftar
+                    <List weight="bold" className="h-3.5 w-3.5" /> Daftar
                   </Button>
                   <Button
-                    variant={viewMode === "map" ? "secondary" : "ghost"}
+                    variant={viewMode === "map" ? "default" : "ghost"}
                     size="sm"
-                    className="h-7 gap-1 px-2 text-xs"
+                    className={cn(
+                      "h-8 gap-1.5 rounded-lg px-3 text-xs font-bold",
+                      viewMode === "map" && "shadow-xs"
+                    )}
                     onClick={() => setViewMode("map")}
                   >
-                    <MapTrifold className="h-3.5 w-3.5" /> Peta
+                    <MapTrifold weight="bold" className="h-3.5 w-3.5" /> Peta
+                    KRL &amp; Banjir
                   </Button>
                 </div>
-              )}
 
-              {!loading &&
-                finalData.length > 0 &&
-                !showFavoritesOnly &&
-                !sharedFavoritesMode && (
-                  <div className="ml-2 w-48">
+                {/* Sort Select */}
+                {!showFavoritesOnly && !sharedFavoritesMode && (
+                  <div className="w-44 sm:w-48">
                     <Select
                       value={localSort}
                       onValueChange={(
-                        v: "default" | "closest-jakarta" | null
+                        v:
+                          | "default"
+                          | "closest-jakarta"
+                          | "price-asc"
+                          | null
                       ) => {
                         if (v) setLocalSort(v)
                       }}
                     >
-                      <SelectTrigger className="h-8 text-xs">
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <MapPin className="h-3.5 w-3.5" weight="bold" />
+                      <SelectTrigger className="h-9 rounded-xl bg-card text-xs font-semibold">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <MapPin
+                            className="h-3.5 w-3.5 shrink-0 text-primary"
+                            weight="fill"
+                          />
                           <SelectValue placeholder="Urutkan" />
                         </div>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="default">
-                          Terbaru (Default)
+                          Terbaru Diperbarui
                         </SelectItem>
                         <SelectItem value="closest-jakarta">
-                          Terdekat dari Jakarta
+                          Terdekat ke Jakarta
+                        </SelectItem>
+                        <SelectItem value="price-asc">
+                          Harga Termurah
                         </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Loading skeletons */}
@@ -624,15 +856,16 @@ export default function Page() {
               {Array.from({ length: 8 }).map((_, i) => (
                 <div
                   key={i}
-                  className="overflow-hidden rounded-xl border bg-card"
+                  className="overflow-hidden rounded-2xl border bg-card"
                 >
-                  <Skeleton className="aspect-video w-full" />
-                  <div className="space-y-2 p-4">
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-3 w-1/2" />
-                    <Skeleton className="h-3 w-2/3" />
-                    <div className="mt-3 border-t pt-2">
-                      <Skeleton className="h-5 w-1/2" />
+                  <Skeleton className="aspect-[16/10] w-full" />
+                  <div className="space-y-2.5 p-4">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-3.5 w-1/2" />
+                    <Skeleton className="h-7 w-full rounded-lg" />
+                    <div className="mt-3 flex justify-between border-t pt-3">
+                      <Skeleton className="h-5 w-1/3" />
+                      <Skeleton className="h-5 w-1/4" />
                     </div>
                   </div>
                 </div>
@@ -651,25 +884,27 @@ export default function Page() {
                 meta={mapArea.meta}
               />
               <div className="flex items-center justify-between gap-3">
-                <h3 className="font-semibold">
-                  Perumahan di area peta
+                <h3 className="font-bold">
+                  Perumahan pada Area Peta
                   {mapArea.region ? `: ${mapArea.region.namaKabupaten}` : ""}
                 </h3>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm font-medium text-muted-foreground">
                   {mapArea.status === "loading"
                     ? "Memuat..."
-                    : `${mapData.length} lokasi`}
+                    : `${mapData.length} lokasi ditemukan`}
                 </span>
               </div>
               {mapData.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {mapData.slice(0, mapListLimit).map((item) => (
                     <HouseCard
                       key={`${item.idLokasi}-map-list`}
                       data={item}
                       onClick={() => setSelectedHouse(item)}
                       isFavorite={isFavorite(item.idLokasi)}
-                      onToggleFavorite={() => toggleFavorite(item)}
+                      onToggleFavorite={() =>
+                        handleToggleFavoriteWithToast(item)
+                      }
                       isCompared={isCompared(item.idLokasi)}
                       onToggleCompare={() => toggleCompare(item)}
                     />
@@ -678,18 +913,19 @@ export default function Page() {
                     <div className="col-span-full flex justify-center pt-2">
                       <Button
                         variant="outline"
+                        className="rounded-full px-6 font-bold"
                         onClick={() => setMapListLimit((limit) => limit + 60)}
                       >
-                        Tampilkan 60 lokasi berikutnya
+                        Tampilkan 60 Lokasi Berikutnya
                       </Button>
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
                   {mapArea.status === "loading"
                     ? "Memuat perumahan untuk wilayah peta..."
-                    : "Tidak ada perumahan pada wilayah peta ini."}
+                    : "Tidak ada perumahan pada wilayah peta ini. Geser peta atau matikan filter subsidi."}
                 </div>
               )}
             </div>
@@ -701,7 +937,7 @@ export default function Page() {
                   data={item}
                   onClick={() => setSelectedHouse(item)}
                   isFavorite={isFavorite(item.idLokasi)}
-                  onToggleFavorite={() => toggleFavorite(item)}
+                  onToggleFavorite={() => handleToggleFavoriteWithToast(item)}
                   isCompared={isCompared(item.idLokasi)}
                   onToggleCompare={() => toggleCompare(item)}
                 />
@@ -709,24 +945,33 @@ export default function Page() {
             </div>
           ) : (
             /* Empty state */
-            <div className="rounded-2xl border border-dashed bg-card py-20 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+            <div className="rounded-2xl border border-dashed bg-card px-4 py-16 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
                 {showFavoritesOnly ? (
-                  <Heart className="h-7 w-7 text-muted-foreground" />
+                  <Heart weight="duotone" className="h-7 w-7" />
                 ) : (
-                  <MagnifyingGlass className="h-7 w-7 text-muted-foreground" />
+                  <MagnifyingGlass weight="duotone" className="h-7 w-7" />
                 )}
               </div>
-              <h3 className="mb-1.5 text-base font-semibold">
+              <h3 className="mb-1.5 text-base font-extrabold">
                 {showFavoritesOnly
-                  ? "Belum ada properti favorit"
-                  : "Tidak ada perumahan ditemukan"}
+                  ? "Belum Ada Properti Favorit"
+                  : "Tidak Ada Perumahan yang Cocok"}
               </h3>
-              <p className="mx-auto max-w-xs text-sm text-muted-foreground">
+              <p className="mx-auto max-w-sm text-sm text-muted-foreground">
                 {showFavoritesOnly
-                  ? "Tekan ikon ♥ pada kartu properti untuk menyimpannya."
-                  : "Coba gunakan kriteria wilayah yang berbeda atau matikan filter subsidi."}
+                  ? "Tekan tombol ♥ pada kartu perumahan untuk menyimpan dan membandingkannya bersama keluarga."
+                  : "Coba pilih wilayah lain atau matikan filter Khusus Rumah Subsidi."}
               </p>
+              {!showFavoritesOnly && (
+                <Button
+                  variant="outline"
+                  onClick={handleResetFilters}
+                  className="mt-4 rounded-full font-bold"
+                >
+                  Reset Semua Filter
+                </Button>
+              )}
             </div>
           )}
         </section>
@@ -740,14 +985,52 @@ export default function Page() {
               {loading && (
                 <div className="flex flex-col items-center gap-2">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Memuat lebih banyak...
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    Memuat perumahan berikutnya...
                   </span>
                 </div>
               )}
             </div>
           )}
       </main>
+
+      {/* Mobile Floating Map / List Toggle Pill (Airbnb-style thumb button) */}
+      {!loading && finalData.length > 0 && compareList.length === 0 && (
+        <div className="pb-safe pointer-events-none fixed inset-x-0 bottom-4 z-30 flex justify-center sm:hidden">
+          <button
+            type="button"
+            onClick={() =>
+              setViewMode((m) => (m === "list" ? "map" : "list"))
+            }
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-xs font-extrabold text-white shadow-xl ring-1 ring-white/15 transition-transform active:scale-95 dark:bg-primary dark:text-primary-foreground"
+          >
+            {viewMode === "list" ? (
+              <>
+                <MapTrifold weight="fill" className="h-4 w-4" />
+                Buka Peta KRL &amp; Banjir
+              </>
+            ) : (
+              <>
+                <List weight="bold" className="h-4 w-4" />
+                Tampilkan Daftar Kartu ({mapData.length})
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Non-intrusive Toast Notification */}
+      {toastMessage && (
+        <div className="pointer-events-none fixed top-20 right-4 left-4 z-50 flex justify-center animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-primary/30 bg-slate-900/95 px-4 py-2.5 text-xs font-bold text-white shadow-xl backdrop-blur-md dark:bg-card dark:text-foreground">
+            <CheckCircle
+              weight="fill"
+              className="h-4 w-4 shrink-0 text-emerald-400"
+            />
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
 
       {/* Compare floating bar */}
       <CompareFloatingBar
@@ -762,7 +1045,9 @@ export default function Page() {
           data={selectedHouse}
           onClose={() => setSelectedHouse(null)}
           isFavorite={isFavorite(selectedHouse.idLokasi)}
-          onToggleFavorite={() => toggleFavorite(selectedHouse)}
+          onToggleFavorite={() => handleToggleFavoriteWithToast(selectedHouse)}
+          isCompared={isCompared(selectedHouse.idLokasi)}
+          onToggleCompare={() => toggleCompare(selectedHouse)}
         />
       )}
     </div>

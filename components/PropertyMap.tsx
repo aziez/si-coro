@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   CircleMarker,
   LayerGroup,
-  LayersControl,
   MapContainer,
   Pane,
   Polyline,
@@ -17,6 +16,7 @@ import {
 import { createLayerComponent } from "@react-leaflet/core"
 import type { LayerProps } from "@react-leaflet/core"
 import { dynamicMapLayer } from "esri-leaflet"
+import { Drop, Mountains, Train, MapPin } from "@phosphor-icons/react"
 import type { Perumahan } from "@/components/HouseCard"
 import {
   KRL_LINES_NETWORK,
@@ -28,6 +28,7 @@ import {
   type Coordinate,
   type MapSearchMeta,
 } from "@/lib/mapSearch"
+import { cn } from "@/lib/utils"
 
 interface PropertyMapProps {
   properties: Perumahan[]
@@ -47,124 +48,16 @@ const JABODETABEK_CENTER: Coordinate = [-6.35, 106.82]
 const FLOOD_HAZARD_SERVICE =
   "https://gis.bnpb.go.id/server/rest/services/inarisk/layer_bahaya_banjir_30/MapServer"
 
-const KRL_LINES = [
-  {
-    name: "Bogor",
-    color: "#e74c3c",
-    stations: [
-      "Stasiun Jakarta Kota",
-      "Stasiun Jayakarta",
-      "Stasiun Mangga Besar",
-      "Stasiun Sawah Besar",
-      "Stasiun Juanda",
-      "Stasiun Gondangdia",
-      "Stasiun Cikini",
-      "Stasiun Manggarai",
-      "Stasiun Tebet",
-      "Stasiun Cawang",
-      "Stasiun Duren Kalibata",
-      "Stasiun Pasar Minggu Baru",
-      "Stasiun Pasar Minggu",
-      "Stasiun Tanjung Barat",
-      "Stasiun Lenteng Agung",
-      "Stasiun Universitas Pancasila",
-      "Stasiun Universitas Indonesia",
-      "Stasiun Pondok Cina",
-      "Stasiun Depok Baru",
-      "Stasiun Depok",
-      "Stasiun Citayam",
-      "Stasiun Bojong Gede",
-      "Stasiun Cilebut",
-      "Stasiun Bogor",
-    ],
-  },
-  {
-    name: "Nambo",
-    color: "#f1c40f",
-    stations: [
-      "Stasiun Citayam",
-      "Stasiun Pondok Rajeg",
-      "Stasiun Cibinong",
-      "Stasiun Gunung Putri",
-      "Stasiun Nambo",
-    ],
-  },
-  {
-    name: "Cikarang",
-    color: "#3498db",
-    stations: [
-      "Stasiun Manggarai",
-      "Stasiun Jatinegara",
-      "Stasiun Klender",
-      "Stasiun Buaran",
-      "Stasiun Klender Baru",
-      "Stasiun Cakung",
-      "Stasiun Kranji",
-      "Stasiun Bekasi",
-      "Stasiun Bekasi Timur",
-      "Stasiun Tambun",
-      "Stasiun Cibitung",
-      "Stasiun Metland Telagamurni",
-      "Stasiun Cikarang",
-    ],
-  },
-  {
-    name: "Rangkasbitung",
-    color: "#2ecc71",
-    stations: [
-      "Stasiun Tanah Abang",
-      "Stasiun Palmerah",
-      "Stasiun Kebayoran",
-      "Stasiun Pondok Ranji",
-      "Stasiun Jurang Mangu",
-      "Stasiun Sudimara",
-      "Stasiun Rawa Buntu",
-      "Stasiun Serpong",
-      "Stasiun Cisauk",
-      "Stasiun Cicayur",
-      "Stasiun Jatake",
-      "Stasiun Parung Panjang",
-      "Stasiun Cilejit",
-      "Stasiun Daru",
-      "Stasiun Tenjo",
-      "Stasiun Tigaraksa",
-      "Stasiun Cikoya",
-      "Stasiun Maja",
-      "Stasiun Citeras",
-      "Stasiun Rangkasbitung",
-    ],
-  },
-  {
-    name: "Tangerang",
-    color: "#9b59b6",
-    stations: [
-      "Stasiun Duri",
-      "Stasiun Grogol",
-      "Stasiun Pesing",
-      "Stasiun Taman Kota",
-      "Stasiun Bojong Indah",
-      "Stasiun Rawa Buaya",
-      "Stasiun Kalideres",
-      "Stasiun Poris",
-      "Stasiun Batu Ceper",
-      "Stasiun Tanah Tinggi",
-      "Stasiun Tangerang",
-    ],
-  },
-  {
-    name: "Tanjung Priok",
-    color: "#e67e22",
-    stations: [
-      "Stasiun Jakarta Kota",
-      "Stasiun Ancol",
-      "Stasiun Tanjung Priok",
-    ],
-  },
-] as const
-
 function findStation(name: string): Station | undefined {
   return KRL_STATIONS.find((station) => station.name === name)
 }
+
+const formatRupiah = (n: number) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(n)
 
 type FloodHazardLayerInstance = ReturnType<typeof dynamicMapLayer>
 
@@ -265,7 +158,7 @@ function KrlStationMarker({
       }}
     >
       <Tooltip direction="top" offset={[0, -4]}>
-        {station.name} · Klik untuk memuat perumahan di wilayah ini
+        {station.name} · Klik untuk memuat perumahan di sekitar stasiun
       </Tooltip>
     </CircleMarker>
   )
@@ -281,15 +174,17 @@ export function PropertyMap({
   regionLabel = "",
   meta,
 }: PropertyMapProps) {
+  const [krlEnabled, setKrlEnabled] = useState(true)
   const [terrainEnabled, setTerrainEnabled] = useState(false)
   const [floodLayerEnabled, setFloodLayerEnabled] = useState(false)
   const [floodLayerLoading, setFloodLayerLoading] = useState(false)
 
   useEffect(() => {
     if (!floodLayerLoading) return
-    const timeout = window.setTimeout(() => setFloodLayerLoading(false), 20_000)
+    const timeout = window.setTimeout(() => setFloodLayerLoading(false), 18_000)
     return () => window.clearTimeout(timeout)
   }, [floodLayerLoading])
+
   const mappedProperties = useMemo(() => {
     const markers = new Map<
       string,
@@ -306,13 +201,65 @@ export function PropertyMap({
   }, [properties])
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border bg-muted shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-muted shadow-md">
+      {/* Top Touch-Friendly Layer Controls Strip */}
+      <div className="no-scrollbar pointer-events-none absolute top-3 right-3 left-14 z-[1000] flex items-center gap-1.5 overflow-x-auto pb-1">
+        <button
+          type="button"
+          onClick={() => setKrlEnabled((v) => !v)}
+          className={cn(
+            "pointer-events-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-md transition-all",
+            krlEnabled
+              ? "border-orange-500/50 bg-orange-600 text-white"
+              : "border-border bg-background/95 text-foreground hover:bg-muted"
+          )}
+        >
+          <Train weight="fill" className="h-3.5 w-3.5" />
+          Jalur KRL
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setFloodLayerEnabled((v) => {
+              const next = !v
+              if (next) setFloodLayerLoading(true)
+              else setFloodLayerLoading(false)
+              return next
+            })
+          }}
+          className={cn(
+            "pointer-events-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-md transition-all",
+            floodLayerEnabled
+              ? "border-red-500/50 bg-red-600 text-white"
+              : "border-border bg-background/95 text-foreground hover:bg-muted"
+          )}
+        >
+          <Drop weight="fill" className="h-3.5 w-3.5" />
+          Peta Banjir BNPB
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTerrainEnabled((v) => !v)}
+          className={cn(
+            "pointer-events-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-md transition-all",
+            terrainEnabled
+              ? "border-blue-500/50 bg-blue-600 text-white"
+              : "border-border bg-background/95 text-foreground hover:bg-muted"
+          )}
+        >
+          <Mountains weight="fill" className="h-3.5 w-3.5" />
+          Kontur Medan
+        </button>
+      </div>
+
       <MapContainer
         center={JABODETABEK_CENTER}
         zoom={10}
         scrollWheelZoom
         preferCanvas
-        className="h-[min(68dvh,680px)] min-h-[430px] w-full"
+        className="h-[min(66dvh,640px)] min-h-[420px] w-full"
         aria-label="Peta perumahan dan akses KRL"
       >
         <TileLayer
@@ -328,112 +275,134 @@ export function PropertyMap({
         )}
 
         <Pane name="flood-hazard" style={{ zIndex: 420 }} />
-        <LayersControl position="topright">
-          <LayersControl.Overlay name="Bahaya Banjir · InaRISK BNPB">
-            <FloodHazardLayer
-              eventHandlers={{
-                add: () => setFloodLayerEnabled(true),
-                remove: () => {
-                  setFloodLayerEnabled(false)
-                  setFloodLayerLoading(false)
-                },
-                loading: () => setFloodLayerLoading(true),
-                load: () => setFloodLayerLoading(false),
-              }}
-            />
-          </LayersControl.Overlay>
+        {floodLayerEnabled && (
+          <FloodHazardLayer
+            eventHandlers={{
+              loading: () => setFloodLayerLoading(true),
+              load: () => setFloodLayerLoading(false),
+            }}
+          />
+        )}
 
-          <LayersControl.Overlay checked name="Perumahan">
-            <Pane name="property-points" style={{ zIndex: 650 }}>
-              <LayerGroup>
-                {mappedProperties.map(({ property, coordinate, markerId }) => {
-                  const selected =
-                    property.idLokasi === selectedProperty?.idLokasi
-                  return (
-                    <CircleMarker
-                      key={markerId}
-                      center={coordinate}
-                      radius={selected ? 12 : 9}
-                      pathOptions={{
-                        color: selected ? "#0f172a" : "#ffffff",
-                        fillColor: selected ? "#f97316" : "#059669",
-                        fillOpacity: 1,
-                        opacity: 1,
-                        weight: selected ? 4 : 3,
-                      }}
-                      eventHandlers={{
-                        click: () => onSelectProperty(property),
-                      }}
-                    >
-                      <Popup className="property-map-popup" autoPan>
-                        <div className="min-w-48 space-y-1 py-1">
-                          <p className="leading-snug font-semibold">
-                            {property.namaPerumahan}
-                          </p>
-                          <p className="text-xs text-slate-600">
-                            {[
-                              property.wilayah?.kecamatan,
-                              property.wilayah?.kabupaten,
-                            ]
-                              .filter(Boolean)
-                              .join(", ") || "Lokasi tersedia"}
-                          </p>
-                          <button
-                            type="button"
-                            className="pt-1 text-xs font-semibold text-emerald-700"
-                            onClick={() => onSelectProperty(property)}
-                          >
-                            Lihat detail
-                          </button>
-                        </div>
-                      </Popup>
-                      <Tooltip direction="top" offset={[0, -7]}>
+        <Pane name="property-points" style={{ zIndex: 650 }}>
+          <LayerGroup>
+            {mappedProperties.map(({ property, coordinate, markerId }) => {
+              const selected =
+                property.idLokasi === selectedProperty?.idLokasi
+              const hargaMulai = property.tipeRumah?.length
+                ? Math.min(...property.tipeRumah.map((t) => t.harga))
+                : 0
+              const hasSubsidi = property.tipeRumah?.some(
+                (t) => t.status === "subsidi"
+              )
+
+              return (
+                <CircleMarker
+                  key={markerId}
+                  center={coordinate}
+                  radius={selected ? 12 : 9}
+                  pathOptions={{
+                    color: selected ? "#0f172a" : "#ffffff",
+                    fillColor: selected
+                      ? "#f97316"
+                      : hasSubsidi
+                        ? "#059669"
+                        : "#2563eb",
+                    fillOpacity: 1,
+                    opacity: 1,
+                    weight: selected ? 4 : 2.5,
+                  }}
+                  eventHandlers={{
+                    click: () => onSelectProperty(property),
+                  }}
+                >
+                  <Popup className="property-map-popup" autoPan>
+                    <div className="min-w-52 space-y-1.5 py-1">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[10px] font-bold text-white",
+                            hasSubsidi ? "bg-emerald-600" : "bg-blue-600"
+                          )}
+                        >
+                          {hasSubsidi ? "Subsidi" : "Komersil"}
+                        </span>
+                        {property.jumlahUnit > 0 && (
+                          <span className="text-[10px] font-semibold text-emerald-700">
+                            Sisa {property.jumlahUnit} unit
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-extrabold leading-snug text-slate-900">
                         {property.namaPerumahan}
-                      </Tooltip>
-                    </CircleMarker>
-                  )
-                })}
-              </LayerGroup>
-            </Pane>
-          </LayersControl.Overlay>
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {[
+                          property.wilayah?.kecamatan,
+                          property.wilayah?.kabupaten,
+                        ]
+                          .filter(Boolean)
+                          .join(", ") || "Lokasi tersedia"}
+                      </p>
+                      {hargaMulai > 0 && (
+                        <p className="text-xs font-extrabold text-emerald-700">
+                          Mulai {formatRupiah(hargaMulai)}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="mt-1 w-full rounded-lg bg-emerald-600 px-3 py-1.5 text-center text-xs font-bold text-white shadow-xs hover:bg-emerald-700"
+                        onClick={() => onSelectProperty(property)}
+                      >
+                        Cek Isi Rumah &amp; Risiko
+                      </button>
+                    </div>
+                  </Popup>
+                  <Tooltip direction="top" offset={[0, -7]}>
+                    {property.namaPerumahan}
+                  </Tooltip>
+                </CircleMarker>
+              )
+            })}
+          </LayerGroup>
+        </Pane>
 
-          <LayersControl.Overlay checked name="Jalur & Stasiun KRL">
-            <LayerGroup>
-              <Pane name="krl-lines" style={{ zIndex: 430 }}>
-                {KRL_LINES_NETWORK.map((line) => {
-                  const points = line.stations.flatMap((name) => {
-                    const station = findStation(name)
-                    return station
-                      ? [[station.lat, station.lon] as Coordinate]
-                      : []
-                  })
-                  return (
-                    <Polyline
-                      key={line.id}
-                      positions={points}
-                      pathOptions={{
-                        color: line.color,
-                        weight: 4,
-                        opacity: 0.85,
-                      }}
-                    >
-                      <Tooltip sticky>{`KRL ${line.name}`}</Tooltip>
-                    </Polyline>
-                  )
-                })}
-              </Pane>
-              <Pane name="krl-stations" style={{ zIndex: 610 }}>
-                {KRL_STATIONS.map((station) => (
-                  <KrlStationMarker
-                    key={station.name}
-                    station={station}
-                    onViewportChange={onViewportChange}
-                  />
-                ))}
-              </Pane>
-            </LayerGroup>
-          </LayersControl.Overlay>
-        </LayersControl>
+        {krlEnabled && (
+          <LayerGroup>
+            <Pane name="krl-lines" style={{ zIndex: 430 }}>
+              {KRL_LINES_NETWORK.map((line) => {
+                const points = line.stations.flatMap((name) => {
+                  const station = findStation(name)
+                  return station
+                    ? [[station.lat, station.lon] as Coordinate]
+                    : []
+                })
+                return (
+                  <Polyline
+                    key={line.id}
+                    positions={points}
+                    pathOptions={{
+                      color: line.color,
+                      weight: 4,
+                      opacity: 0.85,
+                    }}
+                  >
+                    <Tooltip sticky>{`KRL ${line.name}`}</Tooltip>
+                  </Polyline>
+                )
+              })}
+            </Pane>
+            <Pane name="krl-stations" style={{ zIndex: 610 }}>
+              {KRL_STATIONS.map((station) => (
+                <KrlStationMarker
+                  key={station.name}
+                  station={station}
+                  onViewportChange={onViewportChange}
+                />
+              ))}
+            </Pane>
+          </LayerGroup>
+        )}
 
         <MapController
           selectedProperty={selectedProperty}
@@ -441,50 +410,66 @@ export function PropertyMap({
         />
       </MapContainer>
 
-      <button
-        type="button"
-        onClick={() => setTerrainEnabled((enabled) => !enabled)}
-        className="absolute bottom-4 left-4 z-[1000] rounded-lg border bg-background/95 px-3 py-2 text-xs font-semibold shadow-md backdrop-blur hover:bg-muted"
-      >
-        {terrainEnabled ? "Sembunyikan medan" : "Lihat medan"}
-      </button>
-
+      {/* Flood Legend Card */}
       {floodLayerEnabled && (
-        <div className="absolute top-28 left-4 z-[1000] w-44 rounded-lg border bg-background/95 p-3 text-[11px] shadow-md backdrop-blur sm:top-4 sm:left-14 sm:w-52">
+        <div className="absolute top-14 left-3 z-[1000] w-48 rounded-xl border bg-background/95 p-3 text-[11px] shadow-lg backdrop-blur-md sm:left-14 sm:w-56">
           <div className="flex items-center justify-between gap-2">
-            <p className="font-semibold text-foreground">Bahaya banjir</p>
+            <p className="font-bold text-foreground">Indeks Bahaya Banjir</p>
             {floodLayerLoading && (
-              <span className="text-muted-foreground">Memuat…</span>
+              <span className="animate-pulse text-[10px] font-semibold text-primary">
+                Memuat…
+              </span>
             )}
           </div>
-          <div className="mt-2 grid grid-cols-[12px_1fr] items-center gap-x-2 gap-y-1 text-muted-foreground">
-            <span className="h-3 w-3 rounded-sm bg-emerald-500/80" />
-            <span>Indeks rendah</span>
-            <span className="h-3 w-3 rounded-sm bg-amber-400/85" />
-            <span>Indeks sedang</span>
-            <span className="h-3 w-3 rounded-sm bg-red-500/80" />
-            <span>Indeks tinggi</span>
+          <div className="mt-2 flex items-center gap-3 text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-xs bg-emerald-500" /> Rendah
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-xs bg-amber-400" /> Sedang
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-xs bg-red-500" /> Tinggi
+            </span>
           </div>
-          <p className="mt-2 border-t pt-2 leading-relaxed text-muted-foreground">
-            Area transparan berarti tidak terpetakan sebagai bahaya, bukan
-            jaminan bebas banjir.
+          <p className="mt-1.5 border-t pt-1.5 text-[10px] leading-snug text-muted-foreground">
+            Sumber: InaRISK BNPB. Klik titik rumah untuk audit 5-titik radius
+            250m.
           </p>
         </div>
       )}
 
-      <div className="absolute right-4 bottom-4 z-[1000] max-w-64 rounded-lg border bg-background/95 px-3 py-2 text-[11px] shadow-md backdrop-blur">
-        <p className="font-semibold text-foreground">
-          {loading
-            ? "Memuat titik perumahan…"
-            : `${mappedProperties.length} titik perumahan`}
-        </p>
-        {regionLabel && <p className="text-muted-foreground">{regionLabel}</p>}
-        {!loading && meta && meta.withoutCoordinates > 0 && (
-          <p className="text-muted-foreground">
-            {meta.withoutCoordinates} data tanpa koordinat dari Sikumbang
-          </p>
-        )}
-        {error && <p className="text-destructive">{error}</p>}
+      {/* Bottom Consolidated Status Strip */}
+      <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[1000] flex flex-wrap items-center justify-between gap-2">
+        <div className="pointer-events-auto flex items-center gap-3 rounded-xl border bg-background/95 px-3 py-1.5 text-[11px] shadow-md backdrop-blur-md">
+          <span className="flex items-center gap-1.5 font-semibold">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
+            Subsidi
+          </span>
+          <span className="flex items-center gap-1.5 font-semibold">
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+            Komersil
+          </span>
+          <span className="hidden items-center gap-1.5 font-semibold sm:flex">
+            <span className="h-2.5 w-2.5 rounded-full border-2 border-slate-900 bg-white" />
+            Stasiun KRL
+          </span>
+        </div>
+
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border bg-background/95 px-3 py-1.5 text-[11px] shadow-md backdrop-blur-md">
+          <MapPin weight="fill" className="h-3.5 w-3.5 text-primary" />
+          <span className="font-bold text-foreground">
+            {loading
+              ? "Memuat area peta…"
+              : `${mappedProperties.length} titik perumahan`}
+          </span>
+          {regionLabel && (
+            <span className="hidden text-muted-foreground sm:inline">
+              · {regionLabel}
+            </span>
+          )}
+          {error && <span className="text-destructive">· {error}</span>}
+        </div>
       </div>
     </div>
   )

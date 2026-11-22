@@ -1,50 +1,53 @@
-import { useState, useEffect } from 'react';
-import { Perumahan } from '@/components/HouseCard';
+import { useState, useEffect } from "react"
+import { Perumahan } from "@/components/HouseCard"
 
-export function useCompare() {
-  const [compareList, setCompareList] = useState<Perumahan[]>([]);
+export function useCompare(onNotify?: (msg: string) => void) {
+  const [compareList, setCompareList] = useState<Perumahan[]>([])
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('sikumbang_compare');
+      const saved = localStorage.getItem("sikumbang_compare")
       if (saved) {
-        setCompareList(JSON.parse(saved));
+        setCompareList(JSON.parse(saved))
       }
     } catch (e) {
-      console.error('Failed to load compare list', e);
+      console.error("Failed to load compare list", e)
     }
-  }, []);
+  }, [])
 
   const toggleCompare = (house: Perumahan) => {
-    let message = '';
-    setCompareList(prev => {
-      const isExist = prev.some(f => f.idLokasi === house.idLokasi);
-      let newCompare;
+    let feedbackMsg = ""
+    setCompareList((prev) => {
+      const isExist = prev.some((f) => f.idLokasi === house.idLokasi)
+      let newCompare
       if (isExist) {
-        newCompare = prev.filter(f => f.idLokasi !== house.idLokasi);
+        newCompare = prev.filter((f) => f.idLokasi !== house.idLokasi)
+        feedbackMsg = `${house.namaPerumahan} dihapus dari perbandingan.`
       } else {
         if (prev.length >= 3) {
-          message = 'Maksimal 3 perumahan yang dapat dibandingkan.';
-          return prev;
+          feedbackMsg = "Maksimal 3 perumahan yang dapat dibandingkan sekaligus."
+          return prev
         }
-        newCompare = [...prev, house];
+        newCompare = [...prev, house]
+        feedbackMsg = `${house.namaPerumahan} ditambahkan ke perbandingan (${newCompare.length}/3).`
       }
-      localStorage.setItem('sikumbang_compare', JSON.stringify(newCompare));
-      return newCompare;
-    });
-    if (message) {
-      alert(message);
+      localStorage.setItem("sikumbang_compare", JSON.stringify(newCompare))
+      return newCompare
+    })
+    if (feedbackMsg && onNotify) {
+      onNotify(feedbackMsg)
     }
-  };
+  }
 
   const isCompared = (idLokasi: string) => {
-    return compareList.some(f => f.idLokasi === idLokasi);
-  };
+    return compareList.some((f) => f.idLokasi === idLokasi)
+  }
 
   const clearCompare = () => {
-    setCompareList([]);
-    localStorage.removeItem('sikumbang_compare');
-  };
+    setCompareList([])
+    localStorage.removeItem("sikumbang_compare")
+    onNotify?.("Daftar perbandingan dikosongkan.")
+  }
 
-  return { compareList, toggleCompare, isCompared, clearCompare };
+  return { compareList, toggleCompare, isCompared, clearCompare }
 }
