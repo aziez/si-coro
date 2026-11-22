@@ -6,11 +6,12 @@ import { HouseCard, type Perumahan } from "@/components/HouseCard"
 import { HouseDetailModal } from "@/components/HouseDetailModal"
 import { FloatingHeader } from "@/components/FloatingHeader"
 import { CompareFloatingBar } from "@/components/CompareFloatingBar"
+import { XRayHeroScanner } from "@/components/XRayHeroScanner"
+import { BentoCommandCenter } from "@/components/BentoCommandCenter"
 import ShareButton from "@/components/ShareButton"
 import { useFavorites } from "@/hooks/useFavorites"
 import { useCompare } from "@/hooks/useCompare"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   MagnifyingGlass,
@@ -18,15 +19,12 @@ import {
   MapPin,
   List,
   MapTrifold,
-  Drop,
-  Train,
-  Calculator,
-  Compass,
   SealCheck,
   ArrowCounterClockwise,
   CheckCircle,
   CaretUp,
   CaretDown,
+  Sparkle,
 } from "@phosphor-icons/react"
 import type { Wilayah, Asosiasi } from "@/components/SearchPanel"
 import { getDistanceToJakarta } from "@/lib/geoUtils"
@@ -49,33 +47,6 @@ const QUICK_FILTERS = [
   { name: "Kota Depok", code: "3276", prov: "32" },
   { name: "Kota Bogor", code: "3271", prov: "32" },
   { name: "Tangsel", code: "3674", prov: "36" },
-]
-
-const VALUE_PILLARS = [
-  {
-    icon: Drop,
-    title: "Audit Banjir & Elevasi",
-    desc: "5-titik radius 250m InaRISK BNPB + kontur DEM 90m",
-    color: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10",
-  },
-  {
-    icon: Train,
-    title: "Rute Jalan Raya KRL",
-    desc: "Jarak & waktu aktual OSRM ke 3 stasiun KRL terdekat",
-    color: "text-orange-600 dark:text-orange-400 bg-orange-500/10",
-  },
-  {
-    icon: Calculator,
-    title: "True Affordability KPR BTN",
-    desc: "Simulasi cicilan FLPP + ongkos komuter harian riil",
-    color: "text-blue-600 dark:text-blue-400 bg-blue-500/10",
-  },
-  {
-    icon: Compass,
-    title: "Siteplan Live & Tur 360°",
-    desc: "Cek kavling tersedia & interior rumah contoh ChellTour",
-    color: "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10",
-  },
 ]
 
 const API_BASE = "https://sikumbang.tapera.go.id"
@@ -122,6 +93,8 @@ export default function Page() {
 
   // ── UI state ──
   const [selectedHouse, setSelectedHouse] = useState<Perumahan | null>(null)
+  const [hoveredMapHouse, setHoveredMapHouse] = useState<Perumahan | null>(null)
+  const [mapFloodAutoEnable, setMapFloodAutoEnable] = useState(false)
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [sharedFavoritesMode, setSharedFavoritesMode] = useState(false)
   const [sharedData, setSharedData] = useState<Perumahan[]>([])
@@ -168,8 +141,15 @@ export default function Page() {
 
   // ── Refs ──
   const loaderRef = useRef<HTMLDivElement>(null)
+  const catalogRef = useRef<HTMLElement>(null)
   const scrollYRef = useRef(0)
   const lastFetchedPage = useRef(0)
+
+  const scrollToCatalog = useCallback(() => {
+    window.setTimeout(() => {
+      catalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 60)
+  }, [])
 
   // ─── Restore session state / shared URL ────────────────────────────────────
 
@@ -575,78 +555,101 @@ export default function Page() {
         activeSearchLabel={activeSearchLabel}
         activeFilterCount={activeFilterCount}
         onResetFilters={handleResetFilters}
+        isScanning={loading || mapArea.status === "loading"}
       />
 
       {/* Spacer for fixed 64px header */}
       <div className="h-16" />
 
-      <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-        {/* ── Hero Value Proposition Banner ("Cek Isi Rumah, Bukan Kulitnya") ── */}
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8">
+        {/* ── Interactive Hero: X-Ray Scanner (Concept 1) + Animated Bento Command Center (Concept 3) ── */}
         {!sharedFavoritesMode && !showFavoritesOnly && (
-          <section className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-emerald-500/10 via-card to-blue-500/5 p-4 shadow-xs sm:p-5">
-            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="bg-primary text-[10px] font-extrabold uppercase tracking-wider text-primary-foreground">
-                    Cek Isi Rumah, Bukan Kulitnya
-                  </Badge>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    35.483+ Perumahan SiKumbang Terindeks
+          <div className="space-y-3.5">
+            {!heroCollapsed ? (
+              <>
+                <XRayHeroScanner
+                  totalIndexed={totalData > 0 ? totalData : 35483}
+                  isSubsidiActive={isSubsidi}
+                  onOpenMapView={() => {
+                    setMapFloodAutoEnable(false)
+                    setViewMode("map")
+                    scrollToCatalog()
+                  }}
+                  onToggleSubsidiQuick={() => {
+                    setIsSubsidi((v) => !v)
+                    scrollToCatalog()
+                  }}
+                />
+
+                <BentoCommandCenter
+                  onLaunchFloodMap={() => {
+                    setMapFloodAutoEnable(true)
+                    setViewMode("map")
+                    scrollToCatalog()
+                    triggerToast(
+                      "Layer Peta Bahaya Banjir InaRISK BNPB diaktifkan."
+                    )
+                  }}
+                  onLaunchKrlMap={() => {
+                    setMapFloodAutoEnable(false)
+                    setViewMode("map")
+                    scrollToCatalog()
+                    triggerToast(
+                      "Menampilkan 7 koridor rel KRL asli OSM & 84 stasiun aktif."
+                    )
+                  }}
+                  onSortClosestJakarta={() => {
+                    setLocalSort("closest-jakarta")
+                    scrollToCatalog()
+                    triggerToast(
+                      "Diurutkan berdasarkan jarak terdekat ke pusat Jakarta."
+                    )
+                  }}
+                  onOpenFirstPropertyTour={() => {
+                    if (finalData.length > 0) {
+                      setSelectedHouse(finalData[0])
+                    } else {
+                      scrollToCatalog()
+                      triggerToast(
+                        "Pilih perumahan di katalog untuk membuka Siteplan Live & Tur 360°."
+                      )
+                    }
+                  }}
+                />
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setHeroCollapsed(true)}
+                    className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-card px-3 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/35 hover:text-foreground"
+                  >
+                    Ringkas Hero <CaretUp weight="bold" className="h-3 w-3" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-primary/20 bg-gradient-to-r from-emerald-500/10 via-card to-sky-500/10 px-4 py-2.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  <Sparkle
+                    weight="fill"
+                    className="h-4 w-4 text-emerald-500"
+                  />
+                  <span>
+                    Si-Coro — Cek Isi Rumah, Bukan Kulitnya (35.483+ Perumahan ·
+                    84 Stasiun KRL)
                   </span>
                 </div>
-                <h1 className="text-lg font-black tracking-tight text-foreground sm:text-2xl">
-                  Transparansi Rumah Subsidi &amp; Komersil Sebelum Akad KPR
-                </h1>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setHeroCollapsed((v) => !v)}
-                className="inline-flex items-center gap-1 self-start rounded-full border border-border/80 bg-background/80 px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-background hover:text-foreground sm:self-auto"
-              >
-                {heroCollapsed ? (
-                  <>
-                    Lihat Fitur <CaretDown weight="bold" className="h-3 w-3" />
-                  </>
-                ) : (
-                  <>
-                    Ringkas <CaretUp weight="bold" className="h-3 w-3" />
-                  </>
-                )}
-              </button>
-            </div>
-
-            {!heroCollapsed && (
-              <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-                {VALUE_PILLARS.map((pillar) => {
-                  const Icon = pillar.icon
-                  return (
-                    <div
-                      key={pillar.title}
-                      className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/85 p-3 backdrop-blur-xs"
-                    >
-                      <div
-                        className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                          pillar.color
-                        )}
-                      >
-                        <Icon weight="duotone" className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-extrabold text-foreground">
-                          {pillar.title}
-                        </p>
-                        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                          {pillar.desc}
-                        </p>
-                      </div>
-                    </div>
-                  )
-                })}
+                <button
+                  type="button"
+                  onClick={() => setHeroCollapsed(false)}
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-background px-3 py-1 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
+                >
+                  Tampilkan X-Ray &amp; Command Center{" "}
+                  <CaretDown weight="bold" className="h-3 w-3" />
+                </button>
               </div>
             )}
-          </section>
+          </div>
         )}
 
         {/* Shared favorites banner */}
@@ -759,7 +762,7 @@ export default function Page() {
         )}
 
         {/* ── Results Section ── */}
-        <section>
+        <section ref={catalogRef} className="scroll-mt-20">
           {/* Mobile-Friendly Results Toolbar */}
           <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div className="flex flex-wrap items-baseline gap-2">
@@ -779,7 +782,7 @@ export default function Page() {
             </div>
 
             {/* View Toggle & Sort Controls */}
-            {!loading && finalData.length > 0 && (
+            {((!loading && finalData.length > 0) || viewMode === "map") && (
               <div className="flex items-center justify-between gap-2 sm:justify-end">
                 {/* Daftar / Peta Segmented Control */}
                 <div className="flex rounded-xl border border-border/80 bg-muted/50 p-1">
@@ -850,8 +853,8 @@ export default function Page() {
             )}
           </div>
 
-          {/* Loading skeletons */}
-          {loading && data.length === 0 ? (
+          {/* Loading skeletons (list view only so map opens instantly) */}
+          {viewMode !== "map" && loading && data.length === 0 ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div
@@ -871,23 +874,32 @@ export default function Page() {
                 </div>
               ))}
             </div>
-          ) : finalData.length > 0 && viewMode === "map" ? (
+          ) : viewMode === "map" ? (
             <div className="space-y-5">
               <PropertyMap
                 properties={mapData}
                 selectedProperty={selectedHouse}
+                hoveredProperty={hoveredMapHouse}
                 onSelectProperty={setSelectedHouse}
                 onViewportChange={handleMapViewportChange}
                 loading={mapArea.status === "loading"}
                 error={mapArea.error}
                 regionLabel={mapArea.region?.namaKabupaten}
                 meta={mapArea.meta}
+                floodEnabled={mapFloodAutoEnable}
+                onFloodEnabledChange={setMapFloodAutoEnable}
               />
               <div className="flex items-center justify-between gap-3">
-                <h3 className="font-bold">
-                  Perumahan pada Area Peta
-                  {mapArea.region ? `: ${mapArea.region.namaKabupaten}` : ""}
-                </h3>
+                <div>
+                  <h3 className="font-bold">
+                    Perumahan pada Area Peta
+                    {mapArea.region ? `: ${mapArea.region.namaKabupaten}` : ""}
+                  </h3>
+                  <p className="hidden text-xs text-muted-foreground sm:block">
+                    Arahkan kursor pada kartu untuk menyorot radius banjir 250m
+                    &amp; garis akses KRL di peta.
+                  </p>
+                </div>
                 <span className="text-sm font-medium text-muted-foreground">
                   {mapArea.status === "loading"
                     ? "Memuat..."
@@ -896,10 +908,11 @@ export default function Page() {
               </div>
               {mapData.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {mapData.slice(0, mapListLimit).map((item) => (
+                  {mapData.slice(0, mapListLimit).map((item, idx) => (
                     <HouseCard
                       key={`${item.idLokasi}-map-list`}
                       data={item}
+                      index={idx}
                       onClick={() => setSelectedHouse(item)}
                       isFavorite={isFavorite(item.idLokasi)}
                       onToggleFavorite={() =>
@@ -907,6 +920,12 @@ export default function Page() {
                       }
                       isCompared={isCompared(item.idLokasi)}
                       onToggleCompare={() => toggleCompare(item)}
+                      isHighlighted={
+                        hoveredMapHouse?.idLokasi === item.idLokasi
+                      }
+                      onHoverChange={(hovered) =>
+                        setHoveredMapHouse(hovered ? item : null)
+                      }
                     />
                   ))}
                   {mapData.length > mapListLimit && (
@@ -931,10 +950,11 @@ export default function Page() {
             </div>
           ) : finalData.length > 0 ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {finalData.map((item) => (
+              {finalData.map((item, idx) => (
                 <HouseCard
                   key={item.idLokasi}
                   data={item}
+                  index={idx}
                   onClick={() => setSelectedHouse(item)}
                   isFavorite={isFavorite(item.idLokasi)}
                   onToggleFavorite={() => handleToggleFavoriteWithToast(item)}

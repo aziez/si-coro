@@ -29,6 +29,7 @@ interface FloatingHeaderProps extends SearchPanelProps {
   activeSearchLabel: string // e.g. "Bogor · Subsidi" or ""
   activeFilterCount?: number
   onResetFilters?: () => void
+  isScanning?: boolean
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -41,11 +42,20 @@ export function FloatingHeader({
   activeSearchLabel,
   activeFilterCount = 0,
   onResetFilters,
+  isScanning = false,
   ...searchPanelProps
 }: FloatingHeaderProps) {
   const { theme, setTheme } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 12)
+    onScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
 
   // Close panel on outside click
   useEffect(() => {
@@ -88,7 +98,14 @@ export function FloatingHeader({
   return (
     <div ref={wrapperRef} className="fixed inset-x-0 top-0 z-50">
       {/* ── Main Header Bar ─────────────────────────────────── */}
-      <header className="glass-header border-b border-border/60 shadow-xs">
+      <header
+        className={cn(
+          "glass-header border-b transition-all duration-200",
+          isScrolled
+            ? "border-border/80 shadow-md shadow-slate-950/[0.04]"
+            : "border-border/50 shadow-xs"
+        )}
+      >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-8">
           {/* Official Si-Coro Brand Mark */}
           <button
@@ -97,10 +114,10 @@ export function FloatingHeader({
               if (showFavoritesOnly) onToggleFavorites()
               window.scrollTo({ top: 0, behavior: "smooth" })
             }}
-            className="group flex shrink-0 items-center text-left transition-opacity hover:opacity-90"
+            className="group flex shrink-0 items-center text-left transition-opacity hover:opacity-95"
             title="Si-Coro — Cek Isi Rumah, Bukan Kulitnya"
           >
-            <SiCoroLogo showTagline size="md" />
+            <SiCoroLogo showTagline size="md" scanning={isScanning} />
           </button>
 
           {/* Search Pill (center, expandable, mobile-friendly 40px touch target) */}

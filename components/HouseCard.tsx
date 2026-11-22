@@ -11,6 +11,7 @@ import {
   Bathtub,
   ArrowsOut,
   CaretRight,
+  ShieldCheck,
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import {
@@ -102,18 +103,24 @@ const resolveImageUrl = (url: string) =>
 
 export function HouseCard({
   data,
+  index = 0,
   onClick,
   isFavorite = false,
   onToggleFavorite,
   isCompared = false,
   onToggleCompare,
+  isHighlighted = false,
+  onHoverChange,
 }: {
   data: Perumahan
+  index?: number
   onClick?: () => void
   isFavorite?: boolean
   onToggleFavorite?: (e: React.MouseEvent) => void
   isCompared?: boolean
   onToggleCompare?: (e: React.MouseEvent) => void
+  isHighlighted?: boolean
+  onHoverChange?: (hovered: boolean) => void
 }) {
   const imageUrl = data.foto?.[0] ? resolveImageUrl(data.foto[0]) : ""
 
@@ -145,17 +152,42 @@ export function HouseCard({
     }
   }
 
+  // Zero-rerender pointer spotlight coordinate update
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    e.currentTarget.style.setProperty("--spot-x", `${e.clientX - rect.left}px`)
+    e.currentTarget.style.setProperty("--spot-y", `${e.clientY - rect.top}px`)
+  }
+
+  const staggerDelay = `${Math.min(index % 12, 11) * 38}ms`
+
   return (
     <Card
       onClick={onClick}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
+      style={{ ["--stagger-delay" as string]: staggerDelay }}
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs transition-all duration-300",
-        "hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5",
+        "group relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs transition-[transform,box-shadow,border-color] duration-300",
+        index < 12 ? "card-stagger-in" : "scroll-reveal-card",
+        "hover:-translate-y-1.5 hover:border-primary/45 hover:shadow-xl hover:shadow-primary/10",
+        isHighlighted && "border-orange-500 ring-2 ring-orange-500/30",
         onClick && "cursor-pointer"
       )}
     >
+      {/* Subtle emerald cursor spotlight halo on hover (compositor opacity only) */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background:
+            "radial-gradient(240px circle at var(--spot-x, 50%) var(--spot-y, 20%), rgba(16, 185, 129, 0.11), transparent 70%)",
+        }}
+      />
+
       {/* Top-right touch-friendly action buttons (36x36px) */}
-      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5">
+      <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
         <button
           type="button"
           aria-label={
@@ -169,7 +201,7 @@ export function HouseCard({
             onToggleCompare?.(e)
           }}
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-md shadow-sm transition-all active:scale-95",
+            "flex h-9 w-9 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all active:scale-90",
             isCompared
               ? "bg-primary text-primary-foreground ring-2 ring-white/80 dark:ring-slate-900"
               : "bg-background/85 text-foreground/80 hover:bg-background hover:text-primary"
@@ -177,7 +209,7 @@ export function HouseCard({
         >
           <Scales
             weight={isCompared ? "fill" : "bold"}
-            className="h-4 w-4 transition-transform"
+            className="h-4 w-4 transition-transform group-hover:scale-105"
           />
         </button>
 
@@ -190,7 +222,7 @@ export function HouseCard({
             onToggleFavorite?.(e)
           }}
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-md shadow-sm transition-all active:scale-95",
+            "flex h-9 w-9 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all active:scale-90",
             isFavorite
               ? "bg-red-500 text-white ring-2 ring-white/80 dark:ring-slate-900"
               : "bg-background/85 text-foreground/80 hover:bg-background hover:text-red-500"
@@ -198,20 +230,22 @@ export function HouseCard({
         >
           <Heart
             weight={isFavorite ? "fill" : "bold"}
-            className="h-4 w-4 transition-transform"
+            className="h-4 w-4 transition-transform group-hover:scale-105"
           />
         </button>
       </div>
 
       {/* Image Banner */}
-      <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted flex items-center justify-center">
+      <div className="relative flex aspect-[16/10] w-full items-center justify-center overflow-hidden bg-muted">
         {imageUrl ? (
           <Image
             src={imageUrl}
             alt={data.namaPerumahan}
             fill
+            loading={index < 4 ? "eager" : "lazy"}
+            fetchPriority={index < 4 ? "high" : "auto"}
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             onError={(e) => {
               ;(e.target as HTMLImageElement).style.display = "none"
             }}
@@ -226,7 +260,7 @@ export function HouseCard({
         </div>
 
         {/* Gradient vignette at bottom of image for unit badge legibility */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
 
         {/* Top-left Status Badges */}
         <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 pr-20">
@@ -242,7 +276,7 @@ export function HouseCard({
           )}
         </div>
 
-        {/* Bottom-left & Bottom-right Inside Stock Overlay */}
+        {/* Bottom-left & Bottom-right Inside Stock Overlay + Hover Quick Audit Pill */}
         <div className="absolute inset-x-2.5 bottom-2 flex items-center justify-between gap-2 text-[11px] font-semibold text-white">
           {data.jumlahUnit > 0 ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-0.5 backdrop-blur-xs">
@@ -263,18 +297,25 @@ export function HouseCard({
             <span />
           )}
 
-          {data.foto?.length > 1 && (
-            <span className="rounded-full bg-black/50 px-2 py-0.5 text-[10px] backdrop-blur-xs">
-              {data.foto.length} Foto
+          {/* Hover-reveal "Cek Isi" pill on desktop, photo count at rest */}
+          <span className="relative flex items-center">
+            {data.foto?.length > 1 && (
+              <span className="rounded-full bg-black/50 px-2 py-0.5 text-[10px] backdrop-blur-xs transition-opacity duration-200 group-hover:opacity-0">
+                {data.foto.length} Foto
+              </span>
+            )}
+            <span className="pointer-events-none absolute right-0 inline-flex translate-y-1 items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-extrabold whitespace-nowrap text-slate-950 opacity-0 shadow-md transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+              <ShieldCheck weight="fill" className="h-3 w-3" />
+              Cek Isi
             </span>
-          )}
+          </span>
         </div>
       </div>
 
-      <CardContent className="flex flex-1 flex-col gap-2.5 p-4">
+      <CardContent className="relative z-10 flex flex-1 flex-col gap-2.5 p-4">
         {/* Title & Developer */}
         <div>
-          <h3 className="line-clamp-1 text-base font-extrabold tracking-tight text-card-foreground group-hover:text-primary transition-colors">
+          <h3 className="line-clamp-1 text-base font-extrabold tracking-tight text-card-foreground transition-colors group-hover:text-primary">
             {data.namaPerumahan}
           </h3>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -304,7 +345,7 @@ export function HouseCard({
 
         {/* "Isi Rumah" Spec Strip (LB/LT, Bedrooms, Bathrooms) */}
         {primaryTipe && (
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-muted/35 px-2.5 py-1.5 text-[11px] font-semibold text-foreground/85">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-muted/35 px-2.5 py-1.5 text-[11px] font-semibold text-foreground/85 transition-colors group-hover:border-primary/25 group-hover:bg-primary/[0.04]">
             {(primaryTipe.luasBangunan > 0 || primaryTipe.luasTanah > 0) && (
               <span className="inline-flex items-center gap-1">
                 <ArrowsOut className="h-3 w-3 text-primary" />
@@ -354,7 +395,7 @@ export function HouseCard({
         {/* Price + Estimated Monthly Installment Footer */}
         <div className="mt-auto flex items-end justify-between gap-2 border-t border-border/60 pt-3">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
               Harga Mulai
             </p>
             <p className="text-base font-black tracking-tight text-primary">
@@ -367,12 +408,12 @@ export function HouseCard({
               <p className="text-[10px] font-medium text-muted-foreground">
                 Est. KPR 15th
               </p>
-              <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-extrabold text-primary">
+              <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-extrabold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                 {estCicilan}
               </span>
             </div>
           ) : (
-            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-primary group-hover:translate-x-0.5 transition-transform">
+            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-primary transition-transform group-hover:translate-x-0.5">
               Cek Isi <CaretRight weight="bold" className="h-3.5 w-3.5" />
             </span>
           )}

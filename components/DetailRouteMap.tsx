@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import {
   Circle,
   CircleMarker,
@@ -14,33 +14,37 @@ import {
   Tooltip,
   useMap,
 } from "react-leaflet"
-import { createLayerComponent } from "@react-leaflet/core"
-import type { LayerProps } from "@react-leaflet/core"
 import { dynamicMapLayer } from "esri-leaflet"
+import { Drop } from "@phosphor-icons/react"
 import type { StationRouteCandidate } from "@/app/api/route-krl/route"
 import type { KrlRouteSummary } from "@/lib/geoUtils"
+import { cn } from "@/lib/utils"
 
 const FLOOD_HAZARD_SERVICE =
   "https://gis.bnpb.go.id/server/rest/services/inarisk/layer_bahaya_banjir_30/MapServer"
 
-type FloodHazardLayerInstance = ReturnType<typeof dynamicMapLayer>
+function DetailFloodHazardLayer() {
+  const map = useMap()
 
-const FloodHazardLayer = createLayerComponent<
-  FloodHazardLayerInstance,
-  LayerProps
->((_props, context) => ({
-  instance: dynamicMapLayer({
-    url: FLOOD_HAZARD_SERVICE,
-    layers: [0],
-    format: "png32",
-    transparent: true,
-    opacity: 0.5,
-    pane: "detail-flood-hazard",
-    useCors: true,
-    attribution: "InaRISK BNPB",
-  }),
-  context,
-}))
+  useEffect(() => {
+    const layer = dynamicMapLayer({
+      url: FLOOD_HAZARD_SERVICE,
+      layers: [0],
+      format: "png32",
+      transparent: true,
+      opacity: 0.5,
+      pane: "detail-flood-hazard",
+      useCors: true,
+      attribution: "InaRISK BNPB",
+    })
+    layer.addTo(map)
+    return () => {
+      map.removeLayer(layer)
+    }
+  }, [map])
+
+  return null
+}
 
 interface DetailRouteMapProps {
   propertyName: string
@@ -102,8 +106,25 @@ export function DetailRouteMap({
   krlRoute,
   isFloodFree = true,
 }: DetailRouteMapProps) {
+  const [showFloodLayer, setShowFloodLayer] = useState(false)
+
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-2xl">
+    <div className="isolate relative z-0 h-full w-full overflow-hidden rounded-2xl">
+      {/* Touch-friendly BNPB Flood Layer toggle (avoids @react-leaflet/core context issues) */}
+      <button
+        type="button"
+        onClick={() => setShowFloodLayer((v) => !v)}
+        className={cn(
+          "absolute top-3 left-14 z-[1000] inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-md transition-all active:scale-95",
+          showFloodLayer
+            ? "border-red-500/50 bg-red-600 text-white"
+            : "border-border bg-background/95 text-foreground hover:bg-muted"
+        )}
+      >
+        <Drop weight="fill" className="h-3.5 w-3.5" />
+        Layer Banjir BNPB
+      </button>
+
       <MapContainer
         center={[lat, lon]}
         zoom={13}
@@ -119,6 +140,8 @@ export function DetailRouteMap({
         <Pane name="detail-flood-hazard" style={{ zIndex: 410 }} />
         <Pane name="detail-routes" style={{ zIndex: 460 }} />
         <Pane name="detail-markers" style={{ zIndex: 620 }} />
+
+        {showFloodLayer && <DetailFloodHazardLayer />}
 
         <LayersControl position="topright">
           <LayersControl.Overlay checked name="Rute Jalan ke Stasiun (OSRM)">
@@ -200,10 +223,6 @@ export function DetailRouteMap({
                 </Tooltip>
               </Circle>
             </LayerGroup>
-          </LayersControl.Overlay>
-
-          <LayersControl.Overlay name="Layer Bahaya Banjir BNPB">
-            <FloodHazardLayer />
           </LayersControl.Overlay>
         </LayersControl>
 

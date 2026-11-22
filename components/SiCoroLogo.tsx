@@ -6,6 +6,8 @@ interface SiCoroLogoProps {
   showTagline?: boolean
   size?: "sm" | "md" | "lg"
   iconOnly?: boolean
+  /** Pulses the emerald core dot like a radar sonar while scanning/loading data */
+  scanning?: boolean
 }
 
 /**
@@ -17,6 +19,7 @@ export function SiCoroLogo({
   showTagline = false,
   size = "md",
   iconOnly = false,
+  scanning = false,
 }: SiCoroLogoProps) {
   const iconDimensions = {
     sm: "h-7 w-7",
@@ -32,12 +35,15 @@ export function SiCoroLogo({
 
   return (
     <div className={cn("inline-flex items-center gap-2 select-none", className)}>
-      {/* Official Roof + C + Emerald Dot Vector Symbol */}
+      {/* Official Roof + C + Emerald Dot Vector Symbol with Sonar Micro-Animation */}
       <svg
         viewBox="0 0 100 96"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className={cn("shrink-0", iconDimensions)}
+        className={cn(
+          "shrink-0 transition-transform duration-300 group-hover:scale-105",
+          iconDimensions
+        )}
         aria-hidden="true"
       >
         {/* Roof ^ */}
@@ -55,6 +61,20 @@ export function SiCoroLogo({
           strokeWidth="12"
           strokeLinecap="round"
         />
+        {/* Radar Sonar Ring when scanning or hovered */}
+        <circle
+          cx="50"
+          cy="63.5"
+          r="12"
+          style={{ transformOrigin: "50px 63.5px" }}
+          className={cn(
+            "fill-none stroke-emerald-500/70 transition-opacity",
+            scanning
+              ? "radar-ring-pulse opacity-100"
+              : "opacity-0 group-hover:radar-ring-pulse group-hover:opacity-100"
+          )}
+          strokeWidth="4"
+        />
         {/* Inner Emerald Core ("Isi Rumah") */}
         <circle
           cx="50"
@@ -68,7 +88,7 @@ export function SiCoroLogo({
         <div className="flex flex-col justify-center leading-none">
           <div
             className={cn(
-              "font-black tracking-tight flex items-baseline",
+              "flex items-baseline font-black tracking-tight",
               titleClasses
             )}
           >
@@ -76,7 +96,7 @@ export function SiCoroLogo({
             <span className="text-emerald-600 dark:text-emerald-400">Coro</span>
           </div>
           {showTagline && (
-            <span className="mt-0.5 text-[8.5px] font-bold tracking-[0.14em] text-muted-foreground uppercase hidden sm:block">
+            <span className="mt-0.5 hidden text-[8.5px] font-bold tracking-[0.14em] text-muted-foreground uppercase sm:block">
               Cek Isi Rumah, Bukan Kulitnya
             </span>
           )}

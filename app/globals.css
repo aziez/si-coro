@@ -137,13 +137,191 @@
   }
 }
 
+/* ─── Keyframes (Compositor-Friendly: transform / opacity / stroke-dashoffset) ─── */
+
+@keyframes sicoro-radar-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sicoro-radar-ring {
+  0% {
+    transform: scale(0.45);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+
+@keyframes sicoro-dash-flow {
+  from {
+    stroke-dashoffset: 52;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sicoro-float-gentle {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes sicoro-card-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sicoro-pan-360 {
+  0% {
+    transform: translateX(0%);
+  }
+  50% {
+    transform: translateX(-22%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+@keyframes sicoro-shimmer-line {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
 @layer utilities {
+  /* Keep Leaflet strictly contained inside its isolated z-0 wrapper */
+  .leaflet-container {
+    z-index: 0;
+    font-family: var(--font-sans), system-ui, sans-serif;
+  }
+
+  /* Pure-CSS Modern Basemap Styling on free OSM tiles (zero API keys needed) */
+  .si-coro-map-clean .leaflet-tile-pane {
+    filter: saturate(0.58) contrast(0.96) brightness(1.03);
+  }
+
+  .si-coro-map-dark .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(195deg) brightness(0.88) contrast(0.92) saturate(0.55);
+  }
+
   .leaflet-popup-pane {
     z-index: 1300 !important;
   }
 
   .leaflet-popup.property-map-popup {
     z-index: 1301 !important;
+  }
+
+  .leaflet-popup.property-map-popup .leaflet-popup-content-wrapper {
+    border-radius: 1rem;
+    box-shadow: 0 18px 40px -12px rgb(15 23 42 / 0.28);
+    border: 1px solid rgb(226 232 240 / 0.9);
+    padding: 0.25rem;
+  }
+
+  .leaflet-popup.property-map-popup .leaflet-popup-content {
+    margin: 0.65rem 0.75rem;
+  }
+
+  .leaflet-tooltip {
+    border-radius: 0.65rem !important;
+    border: 1px solid rgb(226 232 240 / 0.95) !important;
+    box-shadow: 0 10px 25px -8px rgb(15 23 42 / 0.2) !important;
+    padding: 0.3rem 0.55rem !important;
+    background: rgb(255 255 255 / 0.96) !important;
+    color: #0f172a !important;
+  }
+
+  /* Blueprint subtle grid for X-Ray Hero & Bento Command Center */
+  .blueprint-grid {
+    background-image:
+      linear-gradient(to right, rgb(16 185 129 / 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(16 185 129 / 0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .dark .blueprint-grid {
+    background-image:
+      linear-gradient(to right, rgb(52 211 153 / 0.09) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(52 211 153 / 0.09) 1px, transparent 1px);
+  }
+
+  /* Opt-in Motion Classes (respect prefers-reduced-motion: no-preference) */
+  .krl-track-flow {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: sicoro-dash-flow 1.6s linear infinite;
+    }
+  }
+
+  .radar-sweep-spin {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: sicoro-radar-spin 4.2s linear infinite;
+    }
+  }
+
+  .radar-ring-pulse {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: sicoro-radar-ring 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+    }
+  }
+
+  .float-gentle {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: sicoro-float-gentle 3.8s ease-in-out infinite;
+    }
+  }
+
+  .pan-360-slow {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: sicoro-pan-360 12s ease-in-out infinite;
+    }
+  }
+
+  .shimmer-bar {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: sicoro-shimmer-line 2.6s ease-in-out infinite;
+    }
+  }
+
+  /* Staggered card entrance (safe final state opacity: 1 when reduced motion) */
+  .card-stagger-in {
+    @media (prefers-reduced-motion: no-preference) {
+      animation: sicoro-card-reveal 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: var(--stagger-delay, 0ms);
+    }
+  }
+
+  /* Progressive-enhancement native scroll-driven reveal for deeper catalog rows */
+  @media (prefers-reduced-motion: no-preference) {
+    @supports ((animation-timeline: view()) and (animation-range: entry)) {
+      .scroll-reveal-card {
+        animation: sicoro-card-reveal auto linear backwards;
+        animation-timeline: view();
+        animation-range: entry 0% entry 28%;
+      }
+    }
   }
 
   /* Glassmorphism header — compact floating bar */
