@@ -61,7 +61,7 @@ const Credenza = ({ children, ...props }: RootCredenzaProps) => {
       {isDesktop ? (
         <Dialog {...props}>{children}</Dialog>
       ) : (
-        <Drawer {...props} autoFocus showSwipeHandle>
+        <Drawer {...props} showSwipeHandle>
           {children}
         </Drawer>
       )}
